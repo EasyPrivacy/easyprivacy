@@ -32,4 +32,34 @@ The goal is simple: make private, user-owned digital infrastructure practical wi
 
 ## Project status
 
-EasyPrivacy is currently in the early design and development stage.
+EasyPrivacy is currently in the early design and development stage. Version 0.1 begins with an existing Linux server that the owner already controls.
+
+The initial implementation includes:
+
+- a Flutter management app targeting Windows, Linux, and Android;
+- a Go agent targeting Linux servers;
+- authenticated reporting of real hostname, uptime, memory, and storage data;
+- a responsive dashboard based on the initial interface concept;
+- a manual Linux systemd installer with conservative network defaults;
+- automated Dart, Flutter, and Go tests.
+
+Windows Server remains an intended future server platform but is not part of the initial implementation.
+
+## Repository layout
+
+```text
+app/        Windows, Linux, and Android management app
+agent/      Linux server agent and systemd packaging
+docs/       Architecture and testing documentation
+assets/     Project identity assets
+```
+
+## Test the initial version
+
+The complete platform checklist, Linux agent setup, SSH tunnel instructions, expected results, and security-negative tests are in [docs/manual-testing.md](docs/manual-testing.md).
+
+The current component boundary and explicitly deferred work are documented in [docs/architecture.md](docs/architecture.md).
+
+Linux desktop validation is currently postponed until a test device is available. The restart checklist is preserved in [docs/deferred-linux-desktop-review.md](docs/deferred-linux-desktop-review.md).
+
+To continue in a fresh development conversation, use [docs/next-development-cycle-handoff.md](docs/next-development-cycle-handoff.md).
