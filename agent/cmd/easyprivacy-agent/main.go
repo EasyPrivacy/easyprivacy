@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/easyprivacy/easyprivacy/agent/internal/api"
+	"github.com/easyprivacy/easyprivacy/agent/internal/device"
 	"github.com/easyprivacy/easyprivacy/agent/internal/system"
 )
 
@@ -32,18 +34,20 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: easyprivacy-agent <init|serve|version>")
+		return errors.New("usage: easyprivacy-agent <init|device|serve|version>")
 	}
 	switch args[0] {
 	case "init":
 		return initialize(args[1:])
+	case "device":
+		return runDeviceCommand(args[1:])
 	case "serve":
 		return serve(args[1:])
 	case "version", "--version", "-version":
 		fmt.Printf("easyprivacy-agent %s\n", version)
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q; expected init, serve, or version", args[0])
+		return fmt.Errorf("unknown command %q; expected init, device, serve, or version", args[0])
 	}
 }
 
@@ -66,7 +70,7 @@ func initialize(args []string) error {
 		return fmt.Errorf("agent is already initialized at %s", *stateDir)
 	}
 	if err != nil {
-		return fmt.Errorf("create device token: %w", err)
+		return fmt.Errorf("create shared development token: %w", err)
 	}
 
 	token, err := randomToken()
@@ -78,17 +82,98 @@ func initialize(args []string) error {
 	if _, err := fmt.Fprintln(file, token); err != nil {
 		_ = file.Close()
 		_ = os.Remove(tokenPath)
-		return fmt.Errorf("write device token: %w", err)
+		return fmt.Errorf("write shared development token: %w", err)
 	}
 	if err := file.Close(); err != nil {
-		return fmt.Errorf("close device token: %w", err)
+		return fmt.Errorf("close shared development token: %w", err)
 	}
 
 	fmt.Println("EasyPrivacy agent initialized.")
-	fmt.Println("Enter this development agent token in the EasyPrivacy app:")
+	fmt.Println("Shared development token (compatibility only):")
 	fmt.Println(token)
 	fmt.Println("The token is stored with owner-only permissions and is not logged again.")
-	fmt.Println("Version 0.1 uses one shared development token; per-device enrollment is not implemented yet.")
+	fmt.Println("Use 'easyprivacy-agent device enroll' for a distinct revocable device credential.")
+	fmt.Println("This shared token is not finished per-device authentication.")
+	return nil
+}
+
+func runDeviceCommand(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: easyprivacy-agent device <enroll|list|revoke>")
+	}
+	switch args[0] {
+	case "enroll":
+		return enrollDevice(args[1:])
+	case "list":
+		return listDevices(args[1:])
+	case "revoke":
+		return revokeDevice(args[1:])
+	default:
+		return fmt.Errorf("unknown device command %q; expected enroll, list, or revoke", args[0])
+	}
+}
+
+func enrollDevice(args []string) error {
+	flags := flag.NewFlagSet("device enroll", flag.ContinueOnError)
+	stateDir := flags.String("state-dir", defaultStateDir(), "directory for agent-owned state")
+	name := flags.String("name", "", "owner-visible name for this app installation")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	store, err := device.Open(*stateDir)
+	if err != nil {
+		return err
+	}
+	credential, err := store.Enroll(*name)
+	if err != nil {
+		return err
+	}
+	fmt.Println("EasyPrivacy trusted device enrolled.")
+	fmt.Printf("Device ID: %s\n", credential.Device.ID)
+	fmt.Printf("Device name: %s\n", credential.Device.Name)
+	fmt.Println("Device credential (shown once):")
+	fmt.Println(credential.Token)
+	fmt.Println("The server stored only a credential digest. Transfer this value only through the verified SSH session.")
+	return nil
+}
+
+func listDevices(args []string) error {
+	flags := flag.NewFlagSet("device list", flag.ContinueOnError)
+	stateDir := flags.String("state-dir", defaultStateDir(), "directory for agent-owned state")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	store, err := device.Open(*stateDir)
+	if err != nil {
+		return err
+	}
+	records, err := store.List()
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(records)
+}
+
+func revokeDevice(args []string) error {
+	flags := flag.NewFlagSet("device revoke", flag.ContinueOnError)
+	stateDir := flags.String("state-dir", defaultStateDir(), "directory for agent-owned state")
+	id := flags.String("id", "", "device identifier to revoke")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	store, err := device.Open(*stateDir)
+	if err != nil {
+		return err
+	}
+	if err := store.Revoke(*id); err != nil {
+		if errors.Is(err, device.ErrDeviceNotFound) {
+			return fmt.Errorf("device %q is not active", *id)
+		}
+		return err
+	}
+	fmt.Printf("Revoked EasyPrivacy device %s.\n", *id)
 	return nil
 }
 
@@ -117,9 +202,16 @@ func serve(args []string) error {
 	if token == "" {
 		return errors.New("agent token is empty")
 	}
+	deviceStore, err := device.Open(*stateDir)
+	if err != nil {
+		return fmt.Errorf("open device credential store: %w", err)
+	}
 
 	collector := system.NewCollector(version, *storageRoot)
-	handler := api.NewHandler(token, collector)
+	handler := api.NewHandler(
+		api.NewAnyAuthenticator(api.NewStaticAuthenticator(token), deviceStore),
+		collector,
+	)
 	server := &http.Server{
 		Addr:              *listenAddress,
 		Handler:           handler,
@@ -159,7 +251,7 @@ func serve(args []string) error {
 func randomToken() (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generate device token: %w", err)
+		return "", fmt.Errorf("generate shared development token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }

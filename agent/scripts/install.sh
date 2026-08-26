@@ -47,3 +47,8 @@ printf '%s\n' "$token_output"
 echo
 echo "The agent is listening only on 127.0.0.1:7443."
 echo "Use an SSH tunnel for development or configure an HTTPS reverse proxy before remote access."
+echo
+echo "After independently verifying this server's SSH host key, enroll a distinct device with:"
+echo "sudo -u easyprivacy /usr/local/bin/easyprivacy-agent device enroll \"
+echo "  --state-dir /var/lib/easyprivacy --name 'This device'"
+echo "The device credential is printed once; the shared token above remains development-only."

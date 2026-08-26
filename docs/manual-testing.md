@@ -18,8 +18,9 @@ This plan verifies the initial Windows, Android, and Linux management app plus t
 
 - The server agent supports Linux only.
 - Automatic SSH installation is not implemented yet; the agent is installed manually.
-- Version 0.1 uses one shared development agent token, not independently revocable device credentials.
-- The app keeps the token in memory only. Closing the app forgets the connection and token.
+- The agent still accepts one shared development token for compatibility. It is not independently revocable and is not finished per-device authentication.
+- The agent can issue distinct device credentials through its CLI, but automatic SSH enrollment is not implemented.
+- The app keeps whichever credential is entered in memory only. Closing the app forgets the connection and credential.
 - The agent listens on localhost unless TLS is configured.
 - Service installation, backups, updates, and security management are visible as future areas but are not functional yet.
 - The Windows executable must remain beside its generated DLL and `data` files. Do not copy the `.exe` by itself.
@@ -77,7 +78,7 @@ app\build\windows\x64\runner\Debug\easyprivacy.exe
 1. Launch `easyprivacy.exe` from its `Debug` directory.
 2. Confirm the window title is **EasyPrivacy**.
 3. Confirm the page displays **Connect your Linux server**.
-4. Confirm the server-name, agent-address, and development-agent-token fields are visible.
+4. Confirm the server-name, agent-address, and device-credential-or-development-token fields are visible.
 5. Confirm **Connect server** and **Explore the demo dashboard** are visible.
 
 Expected: the app opens without a console window, crash, blank page, clipped controls, or horizontal scrolling.
@@ -94,7 +95,7 @@ Expected: the welcome panel appears on wide layouts and disappears on narrow lay
 
 1. Clear the server name and press **Connect server**.
 2. Restore the name, clear the URL, and retry.
-3. Enter `http://192.0.2.10:7443` and any token.
+3. Enter `http://192.0.2.10:7443` and any credential.
 
 Expected: empty required fields show validation. A non-local HTTP address is rejected because remote servers require HTTPS.
 
@@ -144,9 +145,9 @@ Expected: every control is reachable and the keyboard does not permanently cover
 ### AND-02 — Input behavior
 
 1. Tap the agent-address field and enter a URL.
-2. Tap the token field.
-3. Use the eye button to show and hide the token.
-4. Confirm the token field normally obscures its value.
+2. Tap the credential field.
+3. Use the eye button to show and hide the credential.
+4. Confirm the credential field normally obscures its value.
 
 Expected: text entry, focus order, keyboard resizing, and token visibility all behave correctly.
 
@@ -287,6 +288,53 @@ Expected: the installer prints the development token on first initialization, en
 
 Do not rerun initialization merely to retrieve a lost token. This development build intentionally does not expose it through logs.
 
+### AGT-05 - Distinct device credential and revocation
+
+This test covers the implemented agent-side slice. It does not claim automatic SSH bootstrap, platform-secure app storage, or owner recovery.
+
+From an SSH session whose host key you independently verified, enroll a disposable test device as the agent service account:
+
+```bash
+sudo -u easyprivacy /usr/local/bin/easyprivacy-agent device enroll \
+  --state-dir /var/lib/easyprivacy \
+  --name "Disposable test device"
+```
+
+Expected: the command prints a device ID and one device credential. It states that the credential is shown once. Keep both private and do not paste the credential into shell history, screenshots, or the test record.
+
+List devices:
+
+```bash
+sudo -u easyprivacy /usr/local/bin/easyprivacy-agent device list \
+  --state-dir /var/lib/easyprivacy
+```
+
+Expected: JSON contains the device ID, name, creation time, and `"revoked": false`. It contains neither the credential nor a credential digest.
+
+Read the credential without echoing it, then authenticate:
+
+```bash
+read -rsp "Device credential: " device_credential
+echo
+curl --fail \
+  -H "Authorization: Bearer $device_credential" \
+  http://127.0.0.1:7443/v1/status
+```
+
+Revoke only that device, then repeat the request:
+
+```bash
+sudo -u easyprivacy /usr/local/bin/easyprivacy-agent device revoke \
+  --state-dir /var/lib/easyprivacy \
+  --id "DEVICE_ID_FROM_ENROLLMENT"
+curl -i \
+  -H "Authorization: Bearer $device_credential" \
+  http://127.0.0.1:7443/v1/status
+unset device_credential
+```
+
+Expected: revocation succeeds without restarting the service, the repeated request returns HTTP 401, and other enrolled device credentials continue working. A second list shows the test device with `"revoked": true`.
+
 ## 5. Real app-to-agent test through SSH
 
 **Current status: Not separately confirmed.** The Linux agent was tested, but this record does not assume that the complete app-to-agent tunnel workflow was included.
@@ -308,7 +356,7 @@ Leave the SSH session open. If local port 7443 is already used, choose another l
 1. Open EasyPrivacy.
 2. Enter a recognizable server name.
 3. Enter `http://127.0.0.1:7443`, or the alternate local port chosen above.
-4. Enter the development token printed during agent initialization.
+4. Enter a distinct device credential from AGT-05 when available. The shared development token remains accepted only for compatibility testing.
 5. Press **Connect server**.
 
 Expected: the real dashboard opens and displays the Linux server's hostname, operating system, architecture, uptime, free memory, total storage, and free storage. Services and backups should honestly report that they are not configured.

@@ -41,6 +41,7 @@ The initial implementation includes:
 - authenticated reporting of real hostname, uptime, memory, and storage data;
 - a responsive dashboard based on the initial interface concept;
 - a manual Linux systemd installer with conservative network defaults;
+- agent-side issuance, listing, and revocation of distinct device credentials;
 - automated Dart, Flutter, and Go tests.
 
 Windows Server remains an intended future server platform but is not part of the initial implementation.
@@ -53,6 +54,12 @@ agent/      Linux server agent and systemd packaging
 docs/       Architecture and testing documentation
 assets/     Project identity assets
 ```
+
+## Trusted-device enrollment status
+
+The reviewed SSH bootstrap, host-key verification, device-credential, threat-model, and recovery boundaries are documented in [docs/trusted-device-enrollment-protocol.md](docs/trusted-device-enrollment-protocol.md).
+
+The current smallest slice issues distinct revocable credentials through the Linux agent CLI and accepts them at the management API. SSH automation, platform-secure app storage, certificate enrollment, recovery, and app-based device management are still pending. The original shared development token remains temporarily accepted for compatibility and is not finished per-device authentication.
 
 ## Test the initial version
 

@@ -82,7 +82,7 @@ Do not continue to interface testing if `flutter doctor -v`, `flutter test`, or 
 - [ ] Required-field validation works.
 - [ ] Remote plain-HTTP server addresses are rejected.
 - [ ] Localhost HTTP remains available for SSH-tunnel development.
-- [ ] The token show/hide control works.
+- [ ] The credential show/hide control works.
 - [ ] The demo dashboard opens and shows the expected sample status.
 
 ### LDR-05 — Navigation
@@ -98,7 +98,7 @@ Follow **NET-01 through NET-04** in [manual-testing.md](manual-testing.md).
 
 - [ ] The Linux desktop app connects through an SSH tunnel.
 - [ ] Real hostname, architecture, uptime, memory, and storage values appear.
-- [ ] A wrong token is rejected.
+- [ ] A wrong credential is rejected.
 - [ ] Closing the tunnel produces a refresh warning without replacing real data with demo data.
 
 ## Completion criteria
@@ -135,4 +135,4 @@ Evidence or screenshots:
 Final result: Deferred
 ```
 
-Never include agent tokens, SSH private keys, passwords, IP addresses that should remain private, or recovery material in the results record.
+Never include device credentials, development tokens, SSH private keys, passwords, IP addresses that should remain private, or recovery material in the results record.

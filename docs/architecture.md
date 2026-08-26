@@ -25,7 +25,7 @@ The app currently supports:
 - a responsive overview based on the interface concept;
 - a clearly identified demonstration dashboard.
 
-The version 0.1 app keeps the development agent token only for the current app process. The agent currently uses one shared development token rather than independently revocable device credentials. Persistent platform-secure credential storage and distinct credentials will be added with trusted-device enrollment.
+The version 0.1 app keeps whichever credential is entered only for the current app process. The agent can now issue distinct device credentials through its CLI, authenticate API requests with them, and revoke them independently. Automatic enrollment and platform-secure app storage are not implemented. The original shared development token remains temporarily accepted for compatibility and is not finished per-device authentication.
 
 ## Linux agent
 
@@ -36,6 +36,7 @@ Security defaults:
 - the API listens on `127.0.0.1:7443` by default;
 - a non-loopback listener is rejected unless TLS is configured;
 - status data requires a 256-bit bearer credential;
+- distinct device credentials are stored only as digests and can be revoked without restarting the agent;
 - bearer comparisons use constant-time digest comparison;
 - management responses are marked `no-store`;
 - the systemd unit uses an unprivileged service account and operating-system hardening;
@@ -43,7 +44,7 @@ Security defaults:
 
 ## Bootstrap boundary
 
-The current installer is deliberately manual while the SSH bootstrap and trusted-device design are finalized. It creates the shared development credential, installs a hardened systemd unit, and prints the initial token once. For local development, the API can be reached through an SSH tunnel. A production remote connection requires trusted HTTPS.
+The current installer remains manual. It creates the shared development credential, installs a hardened systemd unit, and prints the initial token once. After independently verifying the SSH host key, the owner can explicitly enroll a named device through the agent CLI; only the credential digest is retained. For local development, the API can be reached through an SSH tunnel. A production remote connection requires trusted HTTPS.
 
 The intended next bootstrap flow is:
 
@@ -54,7 +55,7 @@ The intended next bootstrap flow is:
 5. Bootstrap credentials are discarded.
 6. Subsequent management uses the revocable device credential.
 
-The enrollment protocol must be designed before automating these steps; the application must not silently trust an unknown TLS certificate or permanently retain an SSH administrator credential.
+The reviewed protocol and threat model are in [trusted-device-enrollment-protocol.md](trusted-device-enrollment-protocol.md). The agent-side enrollment and revocation slice is implemented, but the app does not automate SSH, persist credentials securely, or enroll a trusted certificate. It must not silently trust an unknown TLS certificate or permanently retain an SSH administrator credential.
 
 ## Validation Snapshot
 
@@ -72,7 +73,9 @@ These results validate the initial component scaffolding. They do not remove the
 
 - Windows Server agent and workload hosting;
 - cloud-provider VPS creation;
-- persistent trusted-device enrollment and revocation;
+- automatic SSH bootstrap and app-side secure credential storage;
+- app/API device listing and revocation authorization;
+- owner recovery and lost-all-devices behavior;
 - service deployment;
 - backup orchestration;
 - edge-node orchestration.

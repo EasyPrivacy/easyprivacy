@@ -13,8 +13,8 @@ C:\Users\kason\OneDrive\Desktop\Personal\Projects\EasyPrivacy
 Source repository:
 C:\Users\kason\OneDrive\Desktop\Personal\Projects\EasyPrivacy\easyprivacy
 
-Current branch at handoff:
-dev
+Current development branch:
+secure-device-enrollment-bootstrap
 ```
 
 The repository currently contains uncommitted implementation and documentation changes. A new development conversation must treat every existing change as user-owned, inspect `git status`, and preserve those changes. It must not reset, discard, or overwrite them.
@@ -63,6 +63,8 @@ The concept specification and interface image are in the workspace root, outside
 - Go management agent;
 - versioned JSON health and status endpoints;
 - bearer-token authentication with constant-time digest comparison;
+- distinct device-credential issuance, digest-only storage, listing, and revocation through the agent CLI;
+- immediate API rejection of a revoked device credential without an agent restart;
 - localhost-only HTTP default;
 - rejection of non-loopback HTTP unless TLS is configured;
 - Linux hostname, uptime, memory, and filesystem collection;
@@ -92,8 +94,9 @@ See `docs/manual-testing.md` for the detailed regression suite.
 
 - Automatic SSH bootstrap is not implemented.
 - The current installer is manual.
-- The agent uses one shared development token, not independently revocable device credentials.
-- The app retains that token only for the current process.
+- The agent still accepts one shared development token for compatibility; it is not finished per-device authentication.
+- Distinct credentials currently require a manual command through an independently verified SSH session.
+- The app retains whichever credential is entered only for the current process; platform-secure storage is not implemented.
 - The app does not yet verify or pin a self-hosted agent certificate during enrollment.
 - Services, backups, updates, recovery, and security-management pages are not functional.
 - Linux desktop compilation and visual testing are deferred.
@@ -101,18 +104,18 @@ See `docs/manual-testing.md` for the detailed regression suite.
 
 ## Recommended next milestone
 
-Implement secure owner-device enrollment and one-time SSH bootstrap before deploying the first upstream service.
+Continue secure owner-device enrollment and one-time SSH bootstrap before deploying the first upstream service. The reviewed protocol and threat model are in `docs/trusted-device-enrollment-protocol.md`, and the smallest agent-side credential/revocation slice is implemented.
 
 The next cycle should first produce a reviewed protocol and threat model, then implement the smallest secure vertical slice:
 
 1. Connect to an existing Linux server through SSH.
 2. Show and require explicit verification of the SSH host-key fingerprint.
 3. Install or update the EasyPrivacy agent.
-4. Enroll the current app installation with a distinct device credential.
+4. Invoke the implemented agent enrollment command for the current app installation.
 5. Establish authenticated encrypted management without trusting an unknown certificate.
-6. Store the credential using platform-secure storage.
+6. Store the distinct credential using platform-secure storage.
 7. Remove bootstrap material and avoid retaining SSH administrator credentials.
-8. List and revoke enrolled devices.
+8. Add an app device list and revocation flow after reviewing cross-device authorization.
 9. Add recovery behavior that does not depend on an EasyPrivacy-operated account.
 
 Private DNS is the recommended first managed service after this identity and transport boundary is validated.
