@@ -1,2 +1,8 @@
 /agent/dist/
 *.log
+
+# Generated Flutter desktop plugin registration files
+/app/linux/flutter/generated_plugin_registrant.*
+/app/linux/flutter/generated_plugins.cmake
+/app/windows/flutter/generated_plugin_registrant.*
+/app/windows/flutter/generated_plugins.cmake
