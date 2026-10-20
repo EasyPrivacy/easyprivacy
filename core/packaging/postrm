@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+case "$1" in
+    remove)
+        deb-systemd-helper mask easyprivacy-service.service >/dev/null || true
+        deb-systemd-helper mask easyprivacy-vpn.service >/dev/null || true
+        deb-systemd-helper mask easyprivacy-node.service >/dev/null || true
+        ;;
+    purge)
+        deb-systemd-helper purge easyprivacy-service.service >/dev/null || true
+        deb-systemd-helper unmask easyprivacy-service.service >/dev/null || true
+        deb-systemd-helper purge easyprivacy-vpn.service >/dev/null || true
+        deb-systemd-helper unmask easyprivacy-vpn.service >/dev/null || true
+        deb-systemd-helper purge easyprivacy-node.service >/dev/null || true
+        deb-systemd-helper unmask easyprivacy-node.service >/dev/null || true
+        ;;
+esac
+case "$1" in
+    remove|purge)
+        if [ -d /run/systemd/system ]; then
+            systemctl --system daemon-reload
+        fi
+        ;;
+esac
+# Owner credentials and the core's private identity are user data. Preserve
+# /var/lib/easyprivacy-node and its service account even when purging the package.

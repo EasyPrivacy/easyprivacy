@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-# EasyPrivacy -- V0.0.0
+# EasyPrivacy -- V1.0.0
 
 **Your data should remain yours.**
 
@@ -32,4 +32,25 @@ The goal is simple: make private, user-owned digital infrastructure practical wi
 
 ## Project status
 
-EasyPrivacy is currently in the early design and development stage.
+**V1.0.0 is the first completed MVP.** The owner verified the working MVP on
+October 18, 2026; version 1.0.0 designates that milestone on October 19, 2026.
+
+The release includes Ubuntu core and home service-node packages, secure device
+enrollment, Windows and Android VPN clients, VPS and home Internet exits, home
+server access, and optional Linux GUI control of the home service. The home VM
+connects outbound through the VPS without a public IP or router port forwarding.
+The two VPN legs are encrypted, and the VPS is trusted with forwarding between
+them. IPv4 traffic and DNS use the selected exit; IPv6 remains blocked in the VPN.
+
+The project is now moving to one focused feature at a time. Broader platform
+capabilities described above remain the long-term direction; see the release
+notes for the scope and limitations of the completed MVP.
+
+- [Ubuntu package installation and setup](core/README.md)
+- [V1.0.0 release notes and upgrades](docs/releases/1.0.0.md)
+- [Home exit installation and management access](docs/home-service-node.md)
+- [Desktop / Android app](app/README.md)
+- [Device pairing and authorization](docs/device-pairing.md)
+- [Agreed scope and practical requirements](docs/mvp-revamp.md)
+- [Connection milestone and local validation](docs/connection-milestone.md)
+- [VPN setup and validation](docs/vpn-milestone.md)

@@ -1,0 +1,36 @@
+[Unit]
+Description=EasyPrivacy VPN network helper
+After=network-online.target ufw.service systemd-sysctl.service systemd-tmpfiles-setup.service
+Wants=network-online.target
+ConditionPathExists=/var/lib/easyprivacy-vpn/vpn.json
+ConditionPathExists=/var/lib/easyprivacy-node/core.json
+
+[Service]
+Type=exec
+User=root
+Group=easyprivacy-node
+RuntimeDirectory=easyprivacy-vpn
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/easyprivacy-node vpn-serve
+ExecStopPost=/usr/bin/easyprivacy-node vpn-cleanup
+Restart=on-failure
+RestartSec=2
+UMask=0077
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/easyprivacy-vpn /run/xtables.lock
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Read the unprivileged core's mode-0700 authorization directory without granting
+# permission to modify it. ProtectSystem keeps it read-only in this service.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_CHOWN CAP_DAC_READ_SEARCH
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

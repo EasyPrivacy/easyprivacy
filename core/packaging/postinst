@@ -1,0 +1,80 @@
+#!/bin/sh
+set -eu
+if [ "$1" = configure ]; then
+    previous_version=${2:-}
+    if ! getent group easyprivacy-node >/dev/null; then
+        groupadd --system easyprivacy-node
+    fi
+    if ! getent passwd easyprivacy-node >/dev/null; then
+        useradd --system --gid easyprivacy-node --home-dir /var/lib/easyprivacy-node \
+            --no-create-home --shell /usr/sbin/nologin easyprivacy-node
+    fi
+    record=$(getent passwd easyprivacy-node)
+    old_ifs=$IFS
+    IFS=:
+    set -- $record
+    IFS=$old_ifs
+    service_uid=$3
+    service_gid=$4
+    service_home=$6
+    service_shell=$7
+    expected_gid=$(getent group easyprivacy-node | cut -d: -f3)
+    if [ "$service_uid" = 0 ] || [ "$service_gid" = 0 ] || \
+       [ "$service_gid" != "$expected_gid" ] || \
+       [ "$service_home" != /var/lib/easyprivacy-node ] || \
+       [ "$service_shell" != /usr/sbin/nologin ] || \
+       [ "$(id -G easyprivacy-node)" != "$service_gid" ]; then
+        printf 'Existing easyprivacy-node account does not match the dedicated service identity.\n' >&2
+        exit 1
+    fi
+    if [ -L /var/lib/easyprivacy-node ] || [ -L /var/lib/easyprivacy-node/runtime ]; then
+        printf 'Core state directories must not be symbolic links.\n' >&2
+        exit 1
+    fi
+    install -d -o root -g easyprivacy-node -m 0750 /var/lib/easyprivacy-node
+    install -d -o easyprivacy-node -g easyprivacy-node -m 0700 /var/lib/easyprivacy-node/runtime
+    if [ -L /var/lib/easyprivacy-vpn ]; then
+        printf 'VPN state directory must not be a symbolic link.\n' >&2
+        exit 1
+    fi
+    install -d -o root -g root -m 0700 /var/lib/easyprivacy-vpn
+    if [ -L /var/lib/easyprivacy-service ]; then
+        printf 'Service state directory must not be a symbolic link.\n' >&2
+        exit 1
+    fi
+    install -d -o root -g root -m 0700 /var/lib/easyprivacy-service
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/easyprivacy-vpn.conf
+    deb-systemd-helper unmask easyprivacy-vpn.service >/dev/null || true
+    deb-systemd-helper unmask easyprivacy-service.service >/dev/null || true
+    if [ -f /var/lib/easyprivacy-service/service.json ]; then
+        deb-systemd-helper enable easyprivacy-service.service >/dev/null
+    fi
+    if [ -f /var/lib/easyprivacy-vpn/vpn.json ]; then
+        deb-systemd-helper enable easyprivacy-vpn.service >/dev/null
+    fi
+    deb-systemd-helper unmask easyprivacy-node.service >/dev/null || true
+    if [ -z "$previous_version" ] || deb-systemd-helper --quiet was-enabled easyprivacy-node.service; then
+        deb-systemd-helper enable easyprivacy-node.service >/dev/null
+    else
+        deb-systemd-helper update-state easyprivacy-node.service >/dev/null
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload
+        if [ -f /var/lib/easyprivacy-node/core.json ]; then
+            deb-systemd-invoke try-restart easyprivacy-node.service >/dev/null || true
+        fi
+        if [ -f /var/lib/easyprivacy-vpn/vpn.json ]; then
+            deb-systemd-invoke try-restart easyprivacy-vpn.service >/dev/null || true
+        fi
+        if [ -f /var/lib/easyprivacy-service/service.json ]; then
+            deb-systemd-invoke try-restart easyprivacy-service.service >/dev/null || true
+        fi
+    fi
+    if [ ! -f /var/lib/easyprivacy-node/core.json ]; then
+        printf '\nFor a VPS core: sudo easyprivacy-node setup\nFor a home VM: sudo easyprivacy-node service-setup\n\n'
+    else
+        printf '\nTo allow the configured port in active UFW: sudo easyprivacy-node firewall\n\n'
+        printf 'Pair a device with: sudo easyprivacy-node pair\n\n'
+        printf 'Enable this VPS as an Internet exit with: sudo easyprivacy-node vpn-setup\n\n'
+    fi
+fi
