@@ -1,0 +1,7 @@
+# Keep Linux build inputs usable after checkout on Windows.
+*.sh text eol=lf
+*.py text eol=lf
+/VERSION text eol=lf
+/core/packaging/postinst text eol=lf
+/core/packaging/postrm text eol=lf
+/core/packaging/prerm text eol=lf
