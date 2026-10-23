@@ -1,32 +1,65 @@
 package org.easyprivacy.easyprivacy
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 
 class VpnForegroundService : Service() {
+    private val handler = Handler(Looper.getMainLooper())
+    @Volatile private var stopped = false
+    private val refresh = object : Runnable {
+        override fun run() {
+            VpnRuntime.executor.execute {
+                try {
+                    val state = VpnRuntime.status()
+                    if (!stopped) {
+                        VpnNotifications.publish(this@VpnForegroundService, state)
+                        if (state["active"] != true) stopSelf()
+                    }
+                } catch (_: Exception) {
+                    if (!stopped) VpnNotifications.publish(this@VpnForegroundService,
+                        mapOf("active" to true), "VPN status unavailable")
+                }
+            }
+            handler.postDelayed(this, 3000)
+        }
+    }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
         VpnRuntime.initialize(this)
-        val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("easyprivacy-vpn", "VPN connection", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val stop = PendingIntent.getService(this, 2, Intent(this, VpnForegroundService::class.java).setAction("disconnect"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "easyprivacy-vpn") else Notification.Builder(this)
-        val notification = builder.setContentTitle("EasyPrivacy VPN").setContentText("VPN tunnel active. Open EasyPrivacy for connection status.")
-            .setSmallIcon(android.R.drawable.ic_lock_lock).setContentIntent(open).setOngoing(true)
-            .addAction(Notification.Action.Builder(null, "Disconnect", stop).build()).build()
-        if (Build.VERSION.SDK_INT >= 34) startForeground(1041, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED) else startForeground(1041, notification)
+        VpnNotifications.createChannel(this)
+        val notification = VpnNotifications.build(this, active = true)
+        if (Build.VERSION.SDK_INT >= 34) startForeground(VpnNotifications.ID, notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)
+        else startForeground(VpnNotifications.ID, notification)
+        handler.post(refresh)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "disconnect") VpnRuntime.executor.execute { VpnRuntime.disconnect(); stopSelf() }
+        if (intent?.action == "disconnect") VpnRuntime.executor.execute {
+            try { VpnRuntime.disconnect() }
+            catch (_: Exception) {
+                // Keep Disconnect available if the tunnel could not be stopped.
+                VpnNotifications.publish(this, mapOf("active" to true))
+            }
+        }
         return START_NOT_STICKY
+    }
+    override fun onDestroy() {
+        stopped = true
+        handler.removeCallbacks(refresh)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        // Disconnected mode uses a regular notification, not an idle service.
+        VpnRuntime.executor.execute {
+            try { VpnNotifications.publish(this, VpnRuntime.status()) }
+            catch (_: Exception) {
+                VpnNotifications.publish(this, mapOf("active" to true), "VPN status unavailable")
+            }
+        }
+        super.onDestroy()
     }
 }

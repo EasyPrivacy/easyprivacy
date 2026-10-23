@@ -301,4 +301,13 @@ void Win32Window::UpdateTheme(HWND const window) {
   if (icon != nullptr) {
     SendMessage(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(icon));
   }
+  // Explicitly supply the branded large icon for the taskbar and Alt+Tab.
+  HICON taskbar_icon = static_cast<HICON>(LoadImage(
+      GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+      GetSystemMetricsForDpi(SM_CXICON, dpi),
+      GetSystemMetricsForDpi(SM_CYICON, dpi), LR_SHARED));
+  if (taskbar_icon != nullptr) {
+    SendMessage(window, WM_SETICON, ICON_BIG,
+                reinterpret_cast<LPARAM>(taskbar_icon));
+  }
 }

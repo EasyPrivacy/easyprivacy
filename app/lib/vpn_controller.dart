@@ -165,6 +165,13 @@ class VPNController extends ChangeNotifier {
     _loading = true;
     try {
       final discovered = await core.vpnExits();
+      if (selectedExit == null) {
+        try {
+          selectedExit = await keys.selection();
+        } catch (_) {
+          // Exit discovery and Disconnect remain usable during storage failures.
+        }
+      }
       error = null;
       status = await backend.status();
       _setExits(discovered);

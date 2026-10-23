@@ -16,7 +16,10 @@ object VpnRuntime {
     private val tunnel = object : Tunnel {
         override fun getName() = "EasyPrivacy"
         override fun onStateChange(state: Tunnel.State) {
-            if (state == Tunnel.State.DOWN) context.stopService(Intent(context, VpnForegroundService::class.java))
+            if (state == Tunnel.State.DOWN) {
+                context.stopService(Intent(context, VpnForegroundService::class.java))
+                VpnNotifications.publish(context, mapOf("active" to false))
+            }
         }
     }
     fun initialize(ctx: Context) { context = ctx.applicationContext }
