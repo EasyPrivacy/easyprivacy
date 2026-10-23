@@ -195,6 +195,8 @@ Win32Window::MessageHandler(HWND hwnd,
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 
+      UpdateTheme(hwnd);
+
       return 0;
     }
     case WM_SIZE: {
@@ -214,6 +216,7 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
 
     case WM_DWMCOLORIZATIONCOLORCHANGED:
+    case WM_SETTINGCHANGE:
       UpdateTheme(hwnd);
       return 0;
   }
@@ -273,7 +276,7 @@ void Win32Window::OnDestroy() {
 }
 
 void Win32Window::UpdateTheme(HWND const window) {
-  DWORD light_mode;
+  DWORD light_mode = 1;
   DWORD light_mode_size = sizeof(light_mode);
   LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
                                kGetPreferredBrightnessRegValue,
@@ -284,5 +287,18 @@ void Win32Window::UpdateTheme(HWND const window) {
     BOOL enable_dark_mode = light_mode == 0;
     DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable_dark_mode, sizeof(enable_dark_mode));
+  }
+
+  // Use a transparent mark that contrasts with the title bar. Keep the opaque
+  // application icon for Explorer, the taskbar and Alt+Tab.
+  const int icon_id = light_mode == 0 ? IDI_TITLEBAR_WHITE : IDI_TITLEBAR_BLACK;
+  const UINT dpi = FlutterDesktopGetDpiForMonitor(
+      MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST));
+  HICON icon = static_cast<HICON>(LoadImage(
+      GetModuleHandle(nullptr), MAKEINTRESOURCE(icon_id), IMAGE_ICON,
+      GetSystemMetricsForDpi(SM_CXSMICON, dpi),
+      GetSystemMetricsForDpi(SM_CYSMICON, dpi), LR_SHARED));
+  if (icon != nullptr) {
+    SendMessage(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(icon));
   }
 }

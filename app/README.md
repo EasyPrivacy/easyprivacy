@@ -1,5 +1,22 @@
 # EasyPrivacy V1.0.0 desktop / Android interface
 
+## Platform icons
+
+Android launcher icons and the Windows executable and Linux desktop icons use
+`../assets/EasyPrivacy_White.png` (the black mark on a white background).
+Android also has adaptive and themed launcher icons. Windows title bars use
+`EasyPrivacy_Transparant_White.png` in dark mode and the matching black mark in
+light mode. Linux loads its window icon from the bundle's `data/easyprivacy.png`;
+the Debian package installs the same image into the desktop icon theme.
+
+Platform exports are checked in, so normal builds need no image tooling.
+After changing the source artwork, run `python -m pip install Pillow` and
+`python tool/generate-icons.py` from this directory to regenerate them.
+The script also recreates the transparent white variant by setting RGB to white
+and copying the black source's alpha channel exactly, without image synthesis.
+
+## Overview
+
 This release uses the first iteration's Flutter platform scaffolding,
 green-and-white theme, and logo. It implements short-code pairing, a separate
 Ed25519 identity for each device, remembered-device reconnecting, code creation,

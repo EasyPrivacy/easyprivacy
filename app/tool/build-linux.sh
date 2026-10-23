@@ -33,8 +33,9 @@ Icon=easyprivacy
 Terminal=false
 Type=Application
 Categories=Network;
+StartupWMClass=org.easyprivacy.easyprivacy
 EOF
-install -m 0644 "$app_dir/assets/easyprivacy-mark.png" "$stage/package/usr/share/icons/hicolor/256x256/apps/easyprivacy.png"
+install -m 0644 "$bundle/data/easyprivacy.png" "$stage/package/usr/share/icons/hicolor/256x256/apps/easyprivacy.png"
 cat > "$stage/package/DEBIAN/control" <<EOF
 Package: easyprivacy-desktop
 Version: $version
