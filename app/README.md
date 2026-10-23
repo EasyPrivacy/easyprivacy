@@ -33,6 +33,32 @@ a disconnect control even before core login, so a lost management connection
 does not trap the device behind a stale tunnel. **Disconnect VPN** restores normal
 networking. Boot-time automatic client connection remains future work.
 
+### VPN notifications and Windows tray
+
+Android shows an ongoing VPN notification with status and **Disconnect** while
+the tunnel is active. Allow notifications when Android asks on the first VPN
+connection; if they are blocked, use **Open notification settings** in the app.
+Tap the notification to open the existing EasyPrivacy screen. The service keeps
+status updated even when that screen is closed. A tunnel without a recent
+handshake shows **Waiting for VPN server**, rather than claiming it is connected.
+
+Windows shows EasyPrivacy in the system tray while the VPN is active. Click the
+icon to restore the app; right-click for status, **Open EasyPrivacy**, and
+**Connect VPN** or **Disconnect VPN**. Closing the window while the tray is shown
+keeps the app available there. **Quit EasyPrivacy** removes the tray and exits
+the app; an existing VPN tunnel continues independently. Reopening EasyPrivacy
+restores its status and controls. If connected-only mode removes the last tray
+icon after disconnecting, a hidden window is restored so the app stays accessible.
+
+Enable **Always show VPN status** in the app to keep the notification or tray
+available when disconnected. This per-device setting is saved and is off by
+default. Android's **Connect** button opens the app, restores its saved pairing
+and last used exit, and connects when that exit is ready. Core and exit selection
+stay in the app. Neither mode starts a disconnected VPN automatically at boot.
+Ubuntu's home service management interface is unchanged.
+
+Platform verification steps are in [VPN indicator checks](../docs/vpn-indicator-checks.md).
+
 The Home exit uses the same device tunnel to the VPS and a second encrypted leg
 to an outbound Linux service node. The VPS remains trusted with forwarding. The
 home VM needs no public IP or incoming router port forwarding. Explicit management

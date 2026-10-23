@@ -11,6 +11,7 @@ import 'pairing_client.dart';
 import 'device_dialogs.dart';
 import 'vpn_controller.dart';
 import 'vpn_panel.dart';
+import 'vpn_presence.dart';
 import 'service_node.dart';
 import 'src/theme.dart';
 
@@ -44,6 +45,7 @@ class _EasyPrivacyAppState extends State<EasyPrivacyApp> {
   late final CoreController controller = widget.controller ?? CoreController();
   late final ProfileStore store = widget.store ?? SecureProfileStore();
   late final VPNController vpn;
+  VPNPresenceController? vpnPresence;
   final address = TextEditingController();
   final username = TextEditingController();
   final password = TextEditingController();
@@ -67,6 +69,9 @@ class _EasyPrivacyAppState extends State<EasyPrivacyApp> {
   void initState() {
     super.initState();
     vpn = VPNController(controller);
+    if (Platform.isAndroid || Platform.isWindows) {
+      vpnPresence = VPNPresenceController(vpn);
+    }
     unawaited(_loadProfile());
   }
 
@@ -291,6 +296,7 @@ class _EasyPrivacyAppState extends State<EasyPrivacyApp> {
 
   @override
   void dispose() {
+    vpnPresence?.dispose();
     vpn.dispose();
     verifiedCore?.clear();
     controller.dispose();
@@ -359,6 +365,12 @@ class _EasyPrivacyAppState extends State<EasyPrivacyApp> {
                                 ServiceNodePanel(profile: savedProfile),
                               ],
                               const SizedBox(height: 16),
+                              if (vpnPresence != null) ...[
+                                VPNNotificationSettings(
+                                  controller: vpnPresence!,
+                                ),
+                                const SizedBox(height: 16),
+                              ],
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
