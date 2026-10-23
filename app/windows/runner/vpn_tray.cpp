@@ -87,7 +87,9 @@ void VPNTray::Update() {
   }
   data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
   data.uCallbackMessage = kTrayMessage;
-  data.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+  data.hIcon = static_cast<HICON>(LoadImage(
+      GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+      GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
   const auto tooltip = L"EasyPrivacy - " + status_;
   wcsncpy_s(data.szTip, tooltip.c_str(), _TRUNCATE);
   if (Shell_NotifyIcon(added_ ? NIM_MODIFY : NIM_ADD, &data)) {

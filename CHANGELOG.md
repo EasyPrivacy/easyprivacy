@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restore EasyPrivacy launcher, taskbar and title-bar icons missing from the
+  feature's older dev base, and use the brand mark in Android notifications.
+
 - Android VPN notification permission handling, live tunnel status, quick
   Connect/Disconnect actions and reopening the existing app screen.
 - Windows system tray status, connection controls and reopening the existing

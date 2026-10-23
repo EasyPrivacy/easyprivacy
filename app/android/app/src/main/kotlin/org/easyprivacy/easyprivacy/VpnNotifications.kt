@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Build
 
 /** Native notification state survives a closed Flutter UI. */
@@ -14,6 +16,18 @@ object VpnNotifications {
     const val CHANNEL = "easyprivacy-vpn"
     const val CONNECT = "org.easyprivacy.easyprivacy.CONNECT_VPN"
     private const val PREFS = "vpn-notifications"
+    private var notificationLogo: Bitmap? = null
+
+    private fun logo(context: Context): Bitmap? {
+        notificationLogo?.let { return it }
+        val drawable = context.getDrawable(R.mipmap.ic_launcher) ?: return null
+        val size = (64 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also {
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(Canvas(it))
+            notificationLogo = it
+        }
+    }
 
     fun alwaysShow(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("alwaysShow", false)
@@ -57,6 +71,7 @@ object VpnNotifications {
             else Notification.Builder(context)
         builder.setContentTitle("EasyPrivacy VPN").setContentText(text)
             .setSmallIcon(R.drawable.ic_vpn_status).setContentIntent(open)
+            .setLargeIcon(logo(context))
             .setOngoing(true).setOnlyAlertOnce(true).setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
         if (active || canConnect) {

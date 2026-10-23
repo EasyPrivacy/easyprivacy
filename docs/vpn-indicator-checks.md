@@ -22,6 +22,20 @@ matched. Existing app data was retained. Both test builds and checksums are in
 the workspace's `artifacts/vpn-notifications/` directory. The device checks below
 remain for the owner to perform against a live VPN.
 
+The notification implementation was committed separately as `08aa899` before
+the icon follow-up. That follow-up restores the Android launcher/adaptive icons
+and Windows application/title-bar assets from `logo-fixes` (`22b43d2`), explicitly
+sets the large Windows taskbar icon, and supplies an EasyPrivacy alpha mask plus
+a large app logo for Android notifications. The notification masks are exported
+by `app/tool/export-notification-icons.py`; platform resources were checked for
+non-empty alpha and the expected resolutions before compiling the test builds.
+Both icon-corrected release builds passed. The Windows executable contains all
+three icon groups at nine resolutions each, and the Android APK contains the
+launcher, adaptive foreground and notification resources. The matching-signature
+Android update was installed and opened on Pixel 10 after USB reconnected.
+These follow-up builds are in `artifacts/vpn-notifications/icons-fixed/`.
+The owner verified the Android and Windows icon fixes on October 22, 2026.
+
 ## Android device checks
 
 1. Install the complete app build, pair a device and leave **Always show VPN
