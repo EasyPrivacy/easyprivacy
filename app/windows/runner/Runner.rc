@@ -53,6 +53,8 @@ END
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
+IDI_TITLEBAR_BLACK      ICON                    "resources\\titlebar_black.ico"
+IDI_TITLEBAR_WHITE      ICON                    "resources\\titlebar_white.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////
