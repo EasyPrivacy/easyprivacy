@@ -3,10 +3,10 @@
 An independently installable Files application using Core's authorized private
 streams. The current build supports Android ARM64 and Windows x64.
 
-Files 1.0.0+3 provides [approved, encrypted Send](../../docs/files-send.md) and
+Files 1.0.0+4 provides [approved, encrypted Send](../../docs/files-send.md) and
 [two-device folder Sync](../../docs/files-sync.md) using bundled Syncthing
 through Core. Both need Files open. Send has passed actual phone/laptop transfers;
-Sync has passed real-engine bridge tests and still needs physical phone testing.
+Sync has passed real-engine bridge tests and physical phone/laptop checks.
 Sync initially owns its folders inside Files rather than synchronizing arbitrary
 Android document trees. Drive remains unavailable; no cloud server is installed.
 

@@ -5,6 +5,7 @@ import 'package:easyprivacy_files/providers/device_transfer_provider.dart';
 import 'package:easyprivacy_files/providers/folder_sync_provider.dart';
 import 'package:easyprivacy_files/sync/sync_engine.dart';
 import 'package:easyprivacy_files/transfer/secure_channel.dart';
+import 'package:easyprivacy_files/transfer/send_engine.dart';
 
 const corePin = 'test-core';
 final peer = SendDevice('b' * 64, 'Test phone', 'receiver.test');
@@ -146,6 +147,35 @@ void main() {
     },
   );
 
+  test('an incomplete import cannot replace an existing synced file', () async {
+    final pending = incoming(FakeChannel());
+    await Future<void>.delayed(Duration.zero);
+    provider.decide(true);
+    await pending;
+    final folder = provider.folders.single;
+    final file = await File(
+      '${provider.directory(folder).path}/example.txt',
+    ).writeAsString('keep');
+    await expectLater(
+      provider.importFile(
+        folder,
+        TransferSource(
+          name: 'example.txt',
+          size: 10,
+          read: (_, _) => const Stream.empty(),
+        ),
+        replace: true,
+      ),
+      throwsA(isA<TransferFailure>()),
+    );
+    expect(await file.readAsString(), 'keep');
+    final remaining = await provider.directory(folder).list().toList();
+    expect(remaining, hasLength(1));
+    expect(
+      await FileSystemEntity.identical(remaining.single.path, file.path),
+      isTrue,
+    );
+  });
   test(
     'accepted grant pins identity, pause and stop preserve local files',
     () async {

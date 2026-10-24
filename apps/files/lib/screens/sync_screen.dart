@@ -7,7 +7,7 @@ import 'package:path/path.dart' as paths;
 import '../providers/device_transfer_provider.dart';
 import '../providers/folder_sync_provider.dart';
 import '../transfer/file_store.dart';
-import '../transfer/send_engine.dart';
+import '../transfer/file_selection.dart';
 import 'send_screen.dart';
 
 class SyncScreen extends StatelessWidget {
@@ -335,10 +335,10 @@ class _SyncFolderBrowserState extends State<SyncFolderBrowser> {
   Future<void> _import() async {
     setState(() => busy = true);
     try {
-      final file = await openFile();
-      if (file == null) return;
+      final source = await pickTransferSource();
+      if (source == null) return;
       final destination = File(
-        paths.join(base.path, safeTransferName(file.name)),
+        paths.join(base.path, safeTransferName(source.name)),
       );
       var replace = false;
       if (await destination.exists()) {
@@ -366,15 +366,7 @@ class _SyncFolderBrowserState extends State<SyncFolderBrowser> {
             false;
         if (!replace) return;
       }
-      await widget.provider.importFile(
-        widget.folder,
-        TransferSource(
-          name: file.name,
-          size: await file.length(),
-          read: (s, e) => file.openRead(s, e),
-        ),
-        replace: replace,
-      );
+      await widget.provider.importFile(widget.folder, source, replace: replace);
       await _refresh();
     } catch (e) {
       if (mounted) setState(() => error = e.toString());

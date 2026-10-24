@@ -17,6 +17,12 @@ void main() {
         storeFactory: () async =>
             TransferFileStore(Directory('${root.path}/received')),
       );
+      final mib =
+          int.tryParse(Platform.environment['EP_SEND_MIB'] ?? '8') ?? -1;
+      if (mib != 4 && mib != 8) {
+        throw StateError('EP_SEND_MIB must be 4 or 8.');
+      }
+      final size = mib * 1024 * 1024;
       addTearDown(() async {
         await provider.setReceiving(false);
         provider.dispose();
@@ -32,7 +38,7 @@ void main() {
       final file = File('${root.path}/fixture.bin');
       final handle = await file.open(mode: FileMode.write);
       final chunk = List.generate(64 * 1024, (i) => i % 251);
-      for (var n = 0; n < 128; n++) {
+      for (var n = 0; n < size ~/ chunk.length; n++) {
         await handle.writeFrom(chunk);
       }
       await handle.close();
@@ -46,7 +52,7 @@ void main() {
             (j) => j.phase == TransferPhase.approval && j.incoming,
           )) {
             if (job.name.startsWith('easyprivacy-send-test-') &&
-                job.size == 8 * 1024 * 1024) {
+                job.size == size) {
               provider.accept(job, true);
             }
           }
@@ -80,7 +86,7 @@ void main() {
           TransferSource(
             name:
                 'easyprivacy-send-test-${DateTime.now().millisecondsSinceEpoch}.bin',
-            size: 8 * 1024 * 1024,
+            size: size,
             read: (start, end) => file.openRead(start, end),
           ),
           peers.single,
@@ -90,7 +96,7 @@ void main() {
       }
       // ignore: avoid_print
       print(
-        'PHYSICAL_FILES_SEND_PASS: ${receive ? 'phone to laptop' : 'laptop to phone'}, 8 MiB, verified receipt.',
+        'PHYSICAL_FILES_SEND_PASS: ${receive ? 'phone to laptop' : 'laptop to phone'}, $mib MiB, verified receipt.',
       );
     },
     skip:

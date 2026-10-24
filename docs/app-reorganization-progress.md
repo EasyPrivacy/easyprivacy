@@ -3,7 +3,7 @@
 Branch: codex/reorg-app. Updated October 24, 2026.
 The app split and private-service networking foundation are implemented.
 This is a development migration. Foreground Files Send works on Android and
-Windows; folder Sync now has an implementation with real-engine bridge tests.
+Windows; folder Sync now has real-engine and physical phone/laptop checks.
 Drive and extended device validation remain pending. The owner installed the node update; the physical checks below
 cover the private path, Internet VPN coexistence and actual file transfers.
 
@@ -87,12 +87,42 @@ built and exercised as recorded below.
   extended screen-lock testing to ongoing personal use; it is not marked passed.
 - Full Android caller-denial coverage, device packet-level routing/leak checks,
   production signing/key rotation and migration release testing.
-- Physical folder-Sync validation, Drive and hosted service installation. Send needs
+- Extended folder-Sync validation, Drive and hosted service installation. Send needs
   further OS-kill/background, large-file, physical interruption and production
   release validation. Its new application encryption protocol also needs
   independent security review before a production release.
 - Automatic client startup at boot and complete crash/OS-kill recovery remain
   future work. A stopped private runtime can be restarted from Core.
+
+## Physical Sync and streamed Android selection, October 24, 2026
+
+- Updated the attached Pixel 10 to Files 1.0.0+3 and passed the real Core path:
+  folder approval, 4 MiB laptop-to-phone with native export/SHA-256, phone
+  replacement with laptop SHA-256, deletion, paused-folder isolation and resume.
+- Passed Windows engine stop/start, phone force-stop/relaunch without another
+  invitation, and a verified 4 MiB Send while Sync remained connected.
+- Stop sharing preserved the phone's local folder. Its exported copy matched
+  SHA-256 after the restart checks; explicit Delete local copy then removed it.
+- Found that file_selector_android's selection path allocated a file-sized byte
+  array and could return an empty file when its document provider reported an
+  unknown size. Replaced Android selection with a 64 KiB native worker-thread
+  copy to private cache, returning path/name only. Both modes now read the actual
+  cached file length. Incomplete Sync imports cannot replace existing files.
+- Built and installed Files 1.0.0+4 with the same development publisher. A
+  deliberately `_size=NULL` document delivered all 4 MiB through phone-to-laptop
+  Send and through Sync replacement, with the expected hashes. Both use the
+  normal Android system picker. The Windows counterpart is an opt-in production
+  provider harness, rather than its native file picker.
+- All 24 ordinary Files tests and analysis passed, including picker cancellation,
+  actual staged size, bounded reads, and failed-import preservation. Other app
+  sources are unchanged from the preceding workspace checks. Both Android and
+  Windows release artifacts were refreshed.
+- Removed generated public test folders, received copies and Sync links; restored
+  the phone's original keep-awake setting. Selected-source cache copies follow
+  the new eight-copy/24-hour-on-selection policy. Core's private connection and
+  enrollment were retained. Extended screen-lock testing remains deferred.
+
+See [Files Sync](files-sync.md) for the opt-in physical test procedure.
 
 ## First folder Sync implementation, October 24, 2026
 

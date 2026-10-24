@@ -538,6 +538,9 @@ class FolderSyncProvider extends ChangeNotifier {
     bool replace = false,
   }) async {
     if (busy || folder.enginePeer == null || !folder.linked) return;
+    if (source.size < 0 || source.size > maxTransferBytes) {
+      throw const TransferFailure('The selected file is too large.');
+    }
     final destination = File(
       paths.join(directory(folder).path, safeTransferName(source.name)),
     );
@@ -561,8 +564,20 @@ class FolderSyncProvider extends ChangeNotifier {
     try {
       final handle = await temporary.open(mode: FileMode.write);
       try {
+        var written = 0;
         await for (final chunk in boundedTransferChunks(source.read(0, null))) {
+          written += chunk.length;
+          if (written > source.size) {
+            throw const TransferFailure(
+              'The selected file changed. Choose it again.',
+            );
+          }
           await handle.writeFrom(chunk);
+        }
+        if (written != source.size) {
+          throw const TransferFailure(
+            'The selected file changed. Choose it again.',
+          );
         }
         await handle.flush();
       } finally {

@@ -1,6 +1,8 @@
 # Files Sync: first implementation
 
 Files 1.0.0+3 adds two-device folder Sync on Windows x64 and Android ARM64.
+Files 1.0.0+4 adds streamed native Android source selection and rejects incomplete
+imports before replacing a local file.
 It uses Core 1.0.0+10 and the existing 1.0.1~reorg1 node package. No further
 node update or public service port is needed.
 
@@ -109,8 +111,44 @@ Pop-Location
 
 The opt-in tests launch real engines with isolated synthetic data. They passed
 two-way create/edit, deletion propagation, retained versions, offline conflicts,
-and loopback-only settings. These do not establish physical Android operation
-or background reliability.
+and loopback-only settings. Background reliability remains a separate check.
+
+Physical Pixel 10 / Windows checks on October 24, 2026 also passed:
+
+- Approved folder invitation and 4 MiB laptop-to-phone synchronization, exported
+  through Android's system save UI and independently checked with SHA-256.
+- Phone import/replacement reaching the laptop with the expected SHA-256, and
+  phone deletion propagating back to the laptop.
+- Paused-folder isolation, resume, Windows engine stop/start preserving identity,
+  and phone force-stop/relaunch reconnecting without another invitation.
+- A separately approved 4 MiB Send and verified receipt while Sync stayed active.
+- Stop sharing retaining a browsable/exportable copy with matching SHA-256, then
+  explicit deletion of the local test copy. Generated public test files/links
+  were removed and the phone's temporary keep-awake setting restored.
+- Final Files 1.0.0+4: an Android document with `_size=NULL` selected through both
+  Send and Sync import. Both delivered all 4 MiB with the expected hash. The
+  previous Android picker implementation could return an empty byte array for
+  this case and allocated the entire selected file in memory. The replacement
+  streams a private cache copy before returning only its path/name to Flutter.
+
+The laptop counterpart uses production providers and its real Core broker inside
+an opt-in test harness; the phone uses the normal release app and system pickers.
+This does not establish physical Windows picker behavior or long background use.
+
+To repeat with one phone receiver, set `EP_PHYSICAL_SYNC_TEST=1`,
+`EP_SYNC_TEST_CONTROL` to an existing absolute test directory, and
+`EASYPRIVACY_SYNC_ENGINE` to the built engine. Run
+`flutter test test/physical_sync_test.dart` in apps/files. Its `state.json` names
+the generated test folder, payload and replacement source. Approve the invitation,
+export/check the first file, import the replacement under the same filename,
+then delete it on the phone. The harness verifies the hashes/deletion and pauses
+with a new local copy. After checking that it is absent on the phone, create
+`resume.flag` in the control directory. After `laptop-restarted`, force-stop and
+reopen the phone app, check Synced, then create `phone-restarted.flag`. Enable
+Receive files, create `send.flag`, and approve the test Send. After cleanup create
+`finish.flag`. A shorter `EP_SYNC_PICKER_ONLY=1` run ends after the phone replacement
+hash passes. Register ADB-staged fixtures with Android's Downloads provider so
+they appear in the system picker; a bare shell copy may remain unindexed.
 
 Drive remains unavailable. Its next slice requires server installation and
 authenticated private service discovery before a Files Drive client can use it.

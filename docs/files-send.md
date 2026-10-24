@@ -45,7 +45,12 @@ owner must save/remove one before accepting more. Copies older than 24 hours
 from acceptance are cleared when Files opens or accepts another file. This is
 cleanup on use, not a guarantee of deletion while the app is stopped. Save copies
 needed permanently. Android's native file picker also stages selected source
-files in its app cache; Android controls cache eviction. Outgoing jobs are kept
+files in its private cache. Since Files 1.0.0+4, selection streams from the system
+document provider into a fixed internal payload file on a worker thread using a
+64 KiB buffer. It does not allocate a file-sized array or trust the provider's
+reported size. At most eight selected-source copies remain; older copies expire
+after 24 hours when another file is selected. Android can evict cache earlier;
+choose the original again if retry needs a missing copy. Outgoing jobs are kept
 only in memory. Sender originals and exported destination files are independent
 of retained-copy cleanup.
 

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../providers/device_transfer_provider.dart';
 import '../transfer/secure_channel.dart';
-import '../transfer/send_engine.dart';
+import '../transfer/file_selection.dart';
 
 String fileSize(int bytes) {
   if (bytes < 1024) return '$bytes B';
@@ -32,20 +32,10 @@ class _SendScreenState extends State<SendScreen> {
   Future<void> _pick(SendDevice peer) async {
     setState(() => _picking = true);
     try {
-      final file = await openFile();
-      if (file == null || !mounted) return;
-      final size = await file.length();
+      final source = await pickTransferSource();
+      if (source == null || !mounted) return;
       if (!mounted) return;
-      unawaited(
-        transfers.send(
-          TransferSource(
-            name: file.name,
-            size: size,
-            read: (start, end) => file.openRead(start, end),
-          ),
-          peer,
-        ),
-      );
+      unawaited(transfers.send(source, peer));
     } catch (e) {
       if (mounted) _message(e.toString());
     } finally {
