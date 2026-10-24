@@ -2,18 +2,28 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <algorithm>
+
 #include "flutter_window.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  HANDLE single_instance = CreateMutex(nullptr, FALSE, L"Local\\org.easyprivacy.easyprivacy");
+  std::vector<std::string> command_line_arguments = GetCommandLineArguments();
+  const bool broker = std::find(command_line_arguments.begin(),
+                                command_line_arguments.end(), "--core-broker") !=
+                      command_line_arguments.end();
+  HANDLE single_instance = CreateMutex(
+      nullptr, FALSE, broker ? L"Local\\org.easyprivacy.easyprivacy.broker"
+                             : L"Local\\org.easyprivacy.easyprivacy");
   if (single_instance && GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = FindWindow(L"FLUTTER_RUNNER_WIN32_WINDOW", L"EasyPrivacy");
-    if (existing) {
-      ShowWindow(existing, SW_RESTORE);
-      SetForegroundWindow(existing);
-      PostMessage(existing, WM_APP + 42, 0, 0);
+    if (!broker) {
+      HWND existing = FindWindow(L"FLUTTER_RUNNER_WIN32_WINDOW", L"EasyPrivacy");
+      if (existing) {
+        ShowWindow(existing, SW_RESTORE);
+        SetForegroundWindow(existing);
+        PostMessage(existing, WM_APP + 42, 0, 0);
+      }
     }
     CloseHandle(single_instance);
     return EXIT_SUCCESS;
@@ -30,15 +40,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   flutter::DartProject project(L"data");
 
-  std::vector<std::string> command_line_arguments =
-      GetCommandLineArguments();
-
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project);
+  FlutterWindow window(project, broker);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"EasyPrivacy", origin, size)) {
+  if (!window.Create(broker ? L"EasyPrivacy Core Broker" : L"EasyPrivacy", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

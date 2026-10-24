@@ -126,8 +126,9 @@ need their own pairing/runtime artifacts and builds.
 6. Stop the private connection and confirm the Core foreground notification
    disappears; the Internet VPN remains independently controllable.
 
-The current Files app remains a shell. Receiver/byte-stream behavior is exercised
-by automated tests; this update does not add a file picker, sync engine or Drive.
+The current Files app remains a shell. Receiver/byte-stream behavior passed both
+automated tests and a physical phone/laptop test with 8 MiB in each direction;
+this update does not add a file picker, sync engine or Drive.
 Physical Android startup, manual reconnect, short background operation and
 EasyPrivacy VPN coexistence have passed a smoke test against the updated node.
 Wi-Fi/mobile handovers also passed with and without Proton VPN. Extended screen

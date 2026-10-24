@@ -73,7 +73,8 @@ below verified the private path and EasyPrivacy VPN coexistence.
 
 Earlier foundation checks also built Windows VPN/Files bundles and a Linux Core
 bundle/desktop Debian package. Those earlier bundles predate this private-data
-slice. Core Windows packaging still requires its native Windows pairing DLL.
+slice. The current Windows Core bundle and its pairing DLL were subsequently
+built and exercised as recorded below.
 
 ## Remaining gates and follow-on work
 
@@ -149,6 +150,42 @@ slice. Core Windows packaging still requires its native Windows pairing DLL.
 - These are functional handover/coexistence checks for this device and Proton
   profile. They do not establish packet-level leak behavior or compatibility
   with every provider, protocol, split-tunnel or lockdown setting.
+
+## Windows Core and physical Files transport, October 24, 2026
+
+- Built the Windows x64 pairing DLL from the unchanged Rust sources using the
+  MSVC toolchain. The pairing builder can now select Windows without requiring
+  the Android NDK or Android Rust targets.
+- Corrected Windows startup so the Core UI and its broker use separate instance
+  mutexes. The broker keeps its Flutter/plugin host hidden and creates no VPN
+  tray. A duplicate broker exits without interrupting the original.
+- Built the Windows Core release bundle with the pairing DLL and private runtime.
+  Its isolated packaged-broker smoke test passed authenticated RPC, missing-token
+  rejection and duplicate-launch handling without reading owner enrollment.
+- The real Windows Core retained its existing enrollment, connected to the
+  owner's updated VPS and started its private connection. Its nonce probe passed.
+  The owner enabled Files access in Windows Core; the phone also had Files access.
+- An opt-in Files integration test on the attached Pixel 10 sent 8 MiB to a
+  receiver opened through the Windows SDK, then received 8 MiB back. Both ends
+  passed SHA-256 checks and peer receipts. Data used bounded 64 KiB chunks;
+  the fixture did not read or write personal files. The receiver was removed
+  when the test completed. Neither device needed an Internet VPN for this test.
+- Replaced the phone's temporary test build with the normal ARM64 Files release
+  APK after checking its publisher against Core/VPN. Its Send/Sync/Drive shell
+  launched, then the phone returned to Core. Private connectivity remains on;
+  EasyPrivacy VPN and Proton are disconnected. The rebuilt Windows Core also
+  retained enrollment and Files access and passed its private probe after restart.
+- The Windows Dart client also passed enrollment against disposable Linux Go
+  nodes, reconnect after node restart, durable revocation, and substituted-core
+  identity rejection. Removing an unused VPN-feature import from CoreClient
+  restored the command-line client's ability to compile without Flutter UI.
+- Workspace formatting, analysis, import boundaries and 52 ordinary tests passed.
+  The physical stream fixture is opt-in; normal checks skip it. The separate
+  native-process test remains opt-in and was already verified above.
+
+This proves the shared transport between actual devices. The normal Files app
+still has no file picker, recipient approval, transfer history or Send engine.
+See [the physical stream procedure](physical-private-stream.md) to repeat the test.
 
 ## First physical Android install, October 23, 2026
 

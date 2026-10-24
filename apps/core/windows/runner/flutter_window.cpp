@@ -4,8 +4,8 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project)
-    : project_(project) {}
+FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool broker)
+    : project_(project), broker_(broker) {}
 
 FlutterWindow::~FlutterWindow() {}
 
@@ -25,12 +25,14 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
-  vpn_tray_ = std::make_unique<VPNTray>(
-      GetHandle(), flutter_controller_->engine()->messenger());
+  if (!broker_) {
+    vpn_tray_ = std::make_unique<VPNTray>(
+        GetHandle(), flutter_controller_->engine()->messenger());
+  }
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    if (!broker_) this->Show();
   });
 
   // Flutter can complete the first frame before the "show window" callback is

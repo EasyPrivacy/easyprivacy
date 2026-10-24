@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:easyprivacy_core/runtime/identity/device_identity.dart';
 import 'package:easyprivacy_protocol/easyprivacy_protocol.dart';
-import 'package:easyprivacy_vpn_feature/easyprivacy_vpn.dart';
 import 'package:easyprivacy_core/runtime/api/vpn_node_client.dart';
 import 'private_node_client.dart';
 
