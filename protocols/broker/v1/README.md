@@ -21,7 +21,7 @@ slot until it settles, even after a reply times out.
 | All | getSummary |
 | Core | privateStatus, privateStart, privateStop, privateProbe, refreshGrants |
 | VPN | vpnExits, vpnRegister(exit_id, public_key), vpnDisconnect, vpnStatus |
-| Files | privateStatus, listServices, openStream(service_id), registerReceiver, acceptReceiver(receiver_id), closeReceiver(receiver_id) |
+| Files | privateStatus, listServices, openStream(service_id), registerReceiver, acceptReceiver(receiver_id), closeReceiver(receiver_id), filesDevices(after?), filesHandshake(peer, key, nonce, role) |
 
 VPN/Files operations require explicit grants in Core. Core starts/stops the
 private transport; Files cannot enable it or choose arbitrary IPs, ports or
@@ -29,6 +29,19 @@ routes. Discovery resolves service IDs against the current node response before
 issuing a stream. Disabling Files access invalidates pending work/tickets,
 closes active Files streams and removes the receiver. The UI notifies the
 broker immediately; its background grant check is a fallback.
+
+filesDevices returns up to 16 active paired devices, sorted by ID, with their
+display names and an optional currently advertised receiver service_id. A next
+cursor requests the next page using after. Revoked devices and the caller itself
+are excluded. The smaller pages preserve the UTF-8 broker budget.
+
+filesHandshake signs only the domain-separated Files handshake claim defined in
+easyprivacy_protocol/src/files.dart. Core fixes its own device/core identities
+and a two-minute expiry; the caller supplies only an enrolled peer ID, a 32-byte
+X25519 public key, 256-bit nonce and sender/receiver role. Core rechecks the Files
+grant before issuance. The public identity and signature are returned; no private
+key, remote credential or arbitrary-message signing operation is exposed. See
+[Files Send](../../../docs/files-send.md) for verification and encryption semantics.
 
 ## Stream protocol
 
@@ -51,6 +64,13 @@ silently deliver bytes to a replacement receiver. acceptReceiver waits up to
 eight seconds, returning waiting=true or a one-time incoming stream ticket.
 Receiver queues hold four connections. There are at most 16 native active or
 pending streams, four native listeners and 32 local TLS connections.
+
+Core closes a receiver after 45 seconds without companion activity, checked by
+its maintenance loop. Files refreshes its receiver every 15 seconds while open;
+acceptReceiver also counts as activity. Core's own lease renewal does not count
+as companion activity. This prevents an abandoned Files receiver from being
+advertised indefinitely after its app exits. Node leases still expire after 120
+seconds if Core itself cannot clean up.
 
 Core launches the packaged helper using an anonymous stdin/stdout control pipe;
 keys are not command arguments or registry contents. EOF shuts it down.

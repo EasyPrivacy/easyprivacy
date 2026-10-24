@@ -2,9 +2,10 @@
 
 Branch: codex/reorg-app. Updated October 24, 2026.
 The app split and private-service networking foundation are implemented.
-This is a development migration; Files engines and extended device validation
-remain pending. The owner installed the node update; the physical smoke test
-below verified the private path and EasyPrivacy VPN coexistence.
+This is a development migration. The first foreground Files Send implementation
+now works on Android and Windows; Sync, Drive and extended device validation
+remain pending. The owner installed the node update; the physical checks below
+cover the private path, Internet VPN coexistence and actual file transfers.
 
 ## Implemented
 
@@ -14,7 +15,8 @@ below verified the private path and EasyPrivacy VPN coexistence.
   apps have distinct identities and cannot import Core's private enrollment,
   pairing, owner session or vault implementation.
 - Core owns management and private connectivity; VPN owns its own Internet
-  traffic key and system tunnel. Files remains the Send/Sync/Drive shell.
+  traffic key and system tunnel. Files implements Send; Sync and Drive remain
+  clearly marked placeholders.
 - Scoped broker control: Android verifies caller UID, publisher and package;
   desktop uses a protected per-user endpoint (a local-user trust boundary).
   Controls have a 16 KiB UTF-8 budget, 16 pending operations and 20-second
@@ -84,11 +86,47 @@ built and exercised as recorded below.
   extended screen-lock testing to ongoing personal use; it is not marked passed.
 - Full Android caller-denial coverage, device packet-level routing/leak checks,
   production signing/key rotation and migration release testing.
-- Implement actual Files Send, folder synchronization and Drive engines, their
-  file permissions/UI, application-level end-to-end file protection and hosted
-  service installation. Current receivers are transport groundwork.
+- Folder synchronization, Drive and hosted service installation. Send needs
+  further OS-kill/background, large-file, physical interruption and production
+  release validation. Its new application encryption protocol also needs
+  independent security review before a production release.
 - Automatic client startup at boot and complete crash/OS-kill recovery remain
   future work. A stopped private runtime can be restarted from Core.
+
+## First Files Send implementation, October 24, 2026
+
+- Added paired-device discovery, explicit receiving controls, native file
+  selection, authenticated sender identity, recipient approval, progress,
+  cancellation, verified completion receipts and explicit Save a copy.
+- File bytes and metadata use fresh authenticated X25519/HKDF/AES-GCM sessions
+  above the existing Core streams. No Files seed or Core enrollment key crosses
+  the broker. The node stores receiver metadata rather than file payloads.
+- Receiver storage is private, uses fixed internal names, retains at most eight
+  files and supports explicit retry/resume. Re-selecting the same file after a
+  sender restart also resumes a matching partial. Copies older than 24 hours
+  are cleaned on opening Files or accepting another file. Sync/Drive are unchanged.
+- Added scoped Core handshake delegation and paginated device discovery, with
+  grant/peer/signing tests and companion liveness expiry for abandoned receivers.
+  The installed VPS 1.0.1~reorg1 APIs suffice; no additional node update was needed.
+- Built Windows Core/Files release ZIPs and ARM64 Core 1.0.0+10 / Files 1.0.0+2
+  APKs. The APK publishers match the existing Core/VPN installation. Updated the
+  connected phone in place and retained enrollment and Files access.
+- All 70 ordinary Flutter tests, formatting, analysis and import boundaries
+  passed. Real-socket tests cover empty/one-byte/8 MiB transfers, rejection,
+  interruption/resume, local and authenticated remote cancellation, corruption,
+  altered sources, unsafe metadata, delegation binding and retention.
+- Physical laptop-to-Pixel transfer: the normal Files app displayed the sender
+  and 8 MiB offer; accepted through its UI. Both endpoints verified completion.
+  Used Android's system save dialog to save to local Downloads; the saved copy's
+  SHA-256 matched the generated fixture.
+- Physical Pixel-to-laptop transfer: selected that generated file using Android's
+  normal file picker, sent through Core, and verified the full 8 MiB and receipt
+  on the laptop. The phone displayed recipient verification. The laptop used the
+  production provider in an opt-in test harness rather than its native picker.
+- The isolated packaged Windows Core broker startup/authentication test also
+  passed. Other Internet VPNs were not enabled for these Send tests.
+
+See [Files Send](files-send.md) for behavior, wire format and remaining limits.
 
 ## Updated Android install, October 24, 2026
 

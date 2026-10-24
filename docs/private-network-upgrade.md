@@ -7,7 +7,8 @@ The node adds private peers, a connection diagnostic, discovery and leased
 Files receivers alongside the existing Internet/Home VPN. Existing enrollment,
 certificate, traffic keys, addresses and Internet-exit settings are retained.
 The Core app now owns the userspace private connection; the VPN app remains the
-optional full-device tunnel. The actual Send, Sync and Drive engines follow.
+optional full-device tunnel. The later Core 1.0.0+10 and Files 1.0.0+2 apps add
+the first Send implementation using these same node APIs. Sync and Drive follow.
 
 ## Choose and copy the package
 
@@ -126,9 +127,10 @@ need their own pairing/runtime artifacts and builds.
 6. Stop the private connection and confirm the Core foreground notification
    disappears; the Internet VPN remains independently controllable.
 
-The current Files app remains a shell. Receiver/byte-stream behavior passed both
-automated tests and a physical phone/laptop test with 8 MiB in each direction;
-this update does not add a file picker, sync engine or Drive.
+The initial Files app was a shell. The later Files 1.0.0+2 build adds native file
+selection, recipient approval and encrypted Send with Core 1.0.0+10; see
+[Files Send](files-send.md). Actual phone/laptop file transfers passed with 8 MiB
+in each direction. This node package does not install a sync engine or Drive.
 Physical Android startup, manual reconnect, short background operation and
 EasyPrivacy VPN coexistence have passed a smoke test against the updated node.
 Wi-Fi/mobile handovers also passed with and without Proton VPN. Extended screen

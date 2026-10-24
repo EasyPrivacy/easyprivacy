@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:easyprivacy_protocol/easyprivacy_protocol.dart';
 import 'package:easyprivacy_core_sdk/easyprivacy_core_sdk.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../identity/device_identity.dart';
@@ -132,6 +134,8 @@ class CoreBrokerRuntime {
             'registerReceiver',
             'acceptReceiver',
             'closeReceiver',
+            'filesDevices',
+            'filesHandshake',
           };
     if (!allowedMethods.contains(method)) {
       throw const BrokerException(
@@ -193,6 +197,117 @@ class CoreBrokerRuntime {
       );
     }
     switch (method) {
+      case 'filesDevices':
+        if (arguments.keys.any((k) => k != 'after') ||
+            (arguments.containsKey('after') &&
+                (arguments['after'] is! String ||
+                    !RegExp(
+                      r'^[0-9a-f]{64}$',
+                    ).hasMatch(arguments['after'] as String)))) {
+          throw const BrokerException(
+            'invalid_request',
+            'Invalid device request.',
+          );
+        }
+        final devices = await session.devices();
+        final targets = privateNetwork.active
+            ? await privateNetwork.services()
+            : <PrivateServiceTarget>[];
+        final page =
+            devices
+                .where(
+                  (d) =>
+                      !d.revoked &&
+                      d.id != session.deviceId &&
+                      d.id.compareTo(arguments['after'] as String? ?? '') > 0,
+                )
+                .toList()
+              ..sort((a, b) => a.id.compareTo(b.id));
+        return {
+          if (page.length > 16) 'next': page[15].id,
+          'devices': page.take(16).map((d) {
+            final receivers = targets.where(
+              (t) => t.deviceId == d.id && t.id.startsWith('receiver.'),
+            );
+            return {
+              'id': d.id,
+              'name': d.name,
+              if (receivers.length == 1) 'service_id': receivers.single.id,
+            };
+          }).toList(),
+        };
+      case 'filesHandshake':
+        if (arguments.length != 4 ||
+            arguments.keys.any(
+              (k) => !{'peer', 'key', 'nonce', 'role'}.contains(k),
+            ) ||
+            arguments.values.any((v) => v is! String)) {
+          throw const BrokerException(
+            'invalid_request',
+            'Invalid Files handshake.',
+          );
+        }
+        final peers = await session.devices();
+        if (!peers.any(
+          (d) =>
+              !d.revoked &&
+              d.id == arguments['peer'] &&
+              d.id != session.deviceId,
+        )) {
+          throw const BrokerException(
+            'not_authorized',
+            'That paired device is unavailable.',
+          );
+        }
+        final profile = await store.read();
+        if (profile == null ||
+            profile.fingerprint != session.fingerprint ||
+            profile.deviceId != session.deviceId) {
+          throw const BrokerException(
+            'core_unavailable',
+            'Core enrollment changed. Try again.',
+          );
+        }
+        final identity = await DeviceIdentity.fromSeed(profile.deviceSeed!);
+        if (identity.id != session.deviceId) {
+          throw const BrokerException(
+            'core_unavailable',
+            'Core enrollment is inconsistent.',
+          );
+        }
+        final expires =
+            DateTime.now()
+                .add(const Duration(minutes: 2))
+                .millisecondsSinceEpoch ~/
+            1000;
+        final claim = filesHandshakeClaim(
+          core: session.fingerprint!,
+          device: identity.id,
+          peer: arguments['peer'] as String,
+          key: arguments['key'] as String,
+          nonce: arguments['nonce'] as String,
+          role: arguments['role'] as String,
+          expires: expires,
+        );
+        // Recheck the grant after asynchronous work; never offer generic signing.
+        if (await storage.read(key: 'easyprivacy.broker.allow_files') !=
+            'true') {
+          throw const BrokerException(
+            'grant_required',
+            'Files access changed in Core.',
+          );
+        }
+        return {
+          'core': session.fingerprint,
+          'device': identity.id,
+          'peer': arguments['peer'],
+          'key': arguments['key'],
+          'nonce': arguments['nonce'],
+          'role': arguments['role'],
+          'expires': expires,
+          'identity': base64Encode(identity.publicKey),
+          'signature': base64Encode(await identity.sign(claim)),
+        };
       case 'privateStart':
         unawaited(
           privateNetwork.start().then<void>((_) {}, onError: (Object _) {}),

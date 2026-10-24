@@ -24,6 +24,7 @@ class CorePrivateNetwork {
   PrivateNetworkProfile? _profile;
   String? _receiver;
   DateTime? _renewed;
+  DateTime? _receiverUsed;
   DateTime? lastVerified;
   String? message;
   bool _starting = false;
@@ -227,7 +228,8 @@ class CorePrivateNetwork {
     }
   }
 
-  Future<Map<String, dynamic>> registerReceiver() async {
+  Future<Map<String, dynamic>> registerReceiver({bool fromApp = true}) async {
+    if (fromApp) _receiverUsed = DateTime.now();
     final epoch = _filesEpoch;
     final profile = _requireProfile();
     final lease = await session.privateReceiver();
@@ -278,6 +280,7 @@ class CorePrivateNetwork {
         'This receiver is not registered.',
       );
     }
+    _receiverUsed = DateTime.now();
     return _runtime!.call('accept', {'receiver': id});
   }
 
@@ -321,11 +324,17 @@ class CorePrivateNetwork {
       return;
     }
     if (_receiver != null &&
+        DateTime.now().difference(_receiverUsed ?? DateTime(0)) >=
+            const Duration(seconds: 45)) {
+      await closeReceiver(_receiver!);
+      return;
+    }
+    if (_receiver != null &&
         DateTime.now().difference(_renewed ?? DateTime(0)) >=
             const Duration(seconds: 30) &&
         session.phase == ConnectionPhase.connected) {
       try {
-        await registerReceiver();
+        await registerReceiver(fromApp: false);
       } catch (_) {
         await revokeFiles();
       }

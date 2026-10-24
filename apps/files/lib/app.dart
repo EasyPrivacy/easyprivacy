@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:easyprivacy_core_sdk/easyprivacy_core_sdk.dart';
 import 'package:easyprivacy_ui/easyprivacy_ui.dart';
+import 'providers/device_transfer_provider.dart';
+import 'screens/send_screen.dart';
 
 class EasyPrivacyFilesApp extends StatefulWidget {
-  const EasyPrivacyFilesApp({super.key, this.connection});
+  const EasyPrivacyFilesApp({super.key, this.connection, this.transfers});
   final BrokerCoreConnection? connection;
+  final DeviceTransferProvider? transfers;
   @override
   State<EasyPrivacyFilesApp> createState() => _EasyPrivacyFilesAppState();
 }
@@ -12,9 +15,11 @@ class EasyPrivacyFilesApp extends StatefulWidget {
 class _EasyPrivacyFilesAppState extends State<EasyPrivacyFilesApp> {
   late final core =
       widget.connection ?? BrokerCoreConnection(capability: 'files');
+  late final transfers = widget.transfers ?? DeviceTransferProvider();
   @override
   void dispose() {
     if (widget.connection == null) core.dispose();
+    if (widget.transfers == null) transfers.dispose();
     super.dispose();
   }
 
@@ -56,22 +61,17 @@ class _EasyPrivacyFilesAppState extends State<EasyPrivacyFilesApp> {
                   ),
                 ),
               ),
-              const Expanded(
+              Expanded(
                 child: TabBarView(
                   children: [
-                    _Mode(
-                      icon: Icons.send_outlined,
-                      title: 'Send to a device',
-                      description:
-                          'Send files to an online paired phone or computer without creating a shared folder.',
-                    ),
-                    _Mode(
+                    SendScreen(provider: transfers),
+                    const _Mode(
                       icon: Icons.sync,
                       title: 'Keep folders in sync',
                       description:
                           'Choose folders and devices to keep local copies synchronized.',
                     ),
-                    _Mode(
+                    const _Mode(
                       icon: Icons.cloud_outlined,
                       title: 'Your private Drive',
                       description:
