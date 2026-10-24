@@ -17,13 +17,21 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.easyprivacy/files_storage")
             .setMethodCallHandler { call, result ->
+                if (call.method == "syncEnginePath") {
+                    result.success(File(applicationInfo.nativeLibraryDir, "libeasyprivacy_sync_engine.so").absolutePath)
+                    return@setMethodCallHandler
+                }
                 if (call.method != "saveReceived") { result.notImplemented(); return@setMethodCallHandler }
                 if (pendingSave != null) { result.error("busy", "Finish the current save dialog first.", null); return@setMethodCallHandler }
                 try {
                     val root = File(filesDir, "easyprivacy-send").canonicalFile
                     val file = File(call.argument<String>("path") ?: "").canonicalFile
                     val name = call.argument<String>("name") ?: "file"
-                    require(file.path.startsWith(root.path + File.separator) && file.name == "payload.received" && file.isFile)
+                    val syncRoot = File(filesDir, "easyprivacy-sync").canonicalFile
+                    val syncRelative = file.path.removePrefix(syncRoot.path + File.separator)
+                    val syncFile = file.path.startsWith(syncRoot.path + File.separator) &&
+                        Regex("^[0-9a-f]{64}/folders/ep-[0-9a-f]{32}/.+").matches(syncRelative)
+                    require(((file.path.startsWith(root.path + File.separator) && file.name == "payload.received") || syncFile) && file.isFile)
                     require(name.isNotEmpty() && name.length <= 180 && !name.contains('/') && !name.contains('\\'))
                     pendingSave = result
                     pendingFile = file

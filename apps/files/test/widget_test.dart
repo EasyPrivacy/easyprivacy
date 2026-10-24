@@ -4,6 +4,8 @@ import 'package:easyprivacy_core_sdk/easyprivacy_core_sdk.dart';
 import 'package:easyprivacy_files/app.dart';
 import 'package:easyprivacy_files/providers/device_transfer_provider.dart';
 import 'package:easyprivacy_files/screens/send_screen.dart';
+import 'package:easyprivacy_files/screens/sync_screen.dart';
+import 'package:easyprivacy_files/providers/folder_sync_provider.dart';
 import 'dart:async';
 
 class TestBroker implements BrokerTransport {
@@ -17,6 +19,48 @@ class TestBroker implements BrokerTransport {
 }
 
 void main() {
+  testWidgets('Sync approval and folder invitation fit on a narrow screen', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final transfers = DeviceTransferProvider(autoStart: false);
+    final sync = FolderSyncProvider(transfers: transfers, autoStart: false);
+    const peer = SendDevice('peer', 'Test laptop', 'receiver');
+    transfers.devices = [peer];
+    sync.initialized = true;
+    sync.enabled = true;
+    sync.invitation = SyncInvitation('folder', 'Shared photos', peer, 'engine');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: SyncScreen(provider: sync)),
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('Accept folder'), 180);
+    await tester.tap(find.text('Accept folder'));
+    expect(await sync.invitation!.decision.future, isTrue);
+    sync.invitation = null;
+    sync.changed();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Create shared folder'));
+    await tester.tap(find.text('Create shared folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Test folder');
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Invite device'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    sync.dispose();
+    transfers.dispose();
+  });
   testWidgets('Send approval and cancellation fit on a narrow phone screen', (
     tester,
   ) async {
@@ -28,6 +72,8 @@ void main() {
       autoStart: false,
     );
     final transfers = DeviceTransferProvider(autoStart: false);
+    final sync = FolderSyncProvider(transfers: transfers, autoStart: false);
+    addTearDown(sync.dispose);
     addTearDown(core.dispose);
     addTearDown(transfers.dispose);
     final offer = TransferJob(
@@ -39,7 +85,7 @@ void main() {
     )..decision = Completer<bool>();
     transfers.jobs.add(offer);
     await tester.pumpWidget(
-      EasyPrivacyFilesApp(connection: core, transfers: transfers),
+      EasyPrivacyFilesApp(connection: core, transfers: transfers, sync: sync),
     );
     await tester.scrollUntilVisible(
       find.text('Accept file'),
@@ -79,9 +125,11 @@ void main() {
       );
       addTearDown(core.dispose);
       final transfers = DeviceTransferProvider(autoStart: false);
+      final sync = FolderSyncProvider(transfers: transfers, autoStart: false);
+      addTearDown(sync.dispose);
       addTearDown(transfers.dispose);
       await tester.pumpWidget(
-        EasyPrivacyFilesApp(connection: core, transfers: transfers),
+        EasyPrivacyFilesApp(connection: core, transfers: transfers, sync: sync),
       );
       expect(find.text('Send'), findsOneWidget);
       expect(find.text('Sync'), findsOneWidget);

@@ -1,0 +1,9 @@
+{
+  "product": "Syncthing",
+  "version": "v2.1.7",
+  "license": "MPL-2.0",
+  "sourceUrl": "https://github.com/syncthing/syncthing/releases/download/v2.1.7/syncthing-source-v2.1.7.tar.gz",
+  "sourceSha256": "5b84abd0e8b187f618fb2c38c37fa37ce0b377a275d3e0b981bad94176a24afa",
+  "windowsUrl": "https://github.com/syncthing/syncthing/releases/download/v2.1.7/syncthing-windows-amd64-v2.1.7.zip",
+  "windowsSha256": "3ce7da770f546a8d02b65b2e7ee31f2a3b8b7c3f990ede045590cca4172ecfe1"
+}

@@ -23,6 +23,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Sync currently ships an ARM64 engine. Exclude transitive JNI ABIs
+        // so Android does not advertise an unsupported Files architecture.
+        ndk.abiFilters += listOf("arm64-v8a")
     }
 
     buildTypes {
@@ -31,6 +34,12 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+    packaging {
+        jniLibs.useLegacyPackaging = true
+        // This is a prebuilt Go executable; retain the verified artifact.
+        jniLibs.keepDebugSymbols += "**/libeasyprivacy_sync_engine.so"
+        jniLibs.excludes += setOf("**/armeabi-v7a/**", "**/x86_64/**", "**/x86/**")
     }
 }
 

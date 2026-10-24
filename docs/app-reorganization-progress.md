@@ -2,9 +2,9 @@
 
 Branch: codex/reorg-app. Updated October 24, 2026.
 The app split and private-service networking foundation are implemented.
-This is a development migration. The first foreground Files Send implementation
-now works on Android and Windows; Sync, Drive and extended device validation
-remain pending. The owner installed the node update; the physical checks below
+This is a development migration. Foreground Files Send works on Android and
+Windows; folder Sync now has an implementation with real-engine bridge tests.
+Drive and extended device validation remain pending. The owner installed the node update; the physical checks below
 cover the private path, Internet VPN coexistence and actual file transfers.
 
 ## Implemented
@@ -15,8 +15,9 @@ cover the private path, Internet VPN coexistence and actual file transfers.
   apps have distinct identities and cannot import Core's private enrollment,
   pairing, owner session or vault implementation.
 - Core owns management and private connectivity; VPN owns its own Internet
-  traffic key and system tunnel. Files implements Send; Sync and Drive remain
-  clearly marked placeholders.
+  traffic key and system tunnel. Files implements Send and two-device folder
+  Sync; Drive remains a clearly marked placeholder. See [Files Sync](files-sync.md)
+  for the bundled Syncthing engine, private bridge, approval and platform limits.
 - Scoped broker control: Android verifies caller UID, publisher and package;
   desktop uses a protected per-user endpoint (a local-user trust boundary).
   Controls have a 16 KiB UTF-8 budget, 16 pending operations and 20-second
@@ -86,12 +87,42 @@ built and exercised as recorded below.
   extended screen-lock testing to ongoing personal use; it is not marked passed.
 - Full Android caller-denial coverage, device packet-level routing/leak checks,
   production signing/key rotation and migration release testing.
-- Folder synchronization, Drive and hosted service installation. Send needs
+- Physical folder-Sync validation, Drive and hosted service installation. Send needs
   further OS-kill/background, large-file, physical interruption and production
   release validation. Its new application encryption protocol also needs
   independent security review before a production release.
 - Automatic client startup at boot and complete crash/OS-kill recovery remain
   future work. A stopped private runtime can be restarted from Core.
+
+## First folder Sync implementation, October 24, 2026
+
+- Bundled pinned Syncthing v2.1.7 for Windows x64 and Android ARM64. The engine
+  has loopback-only networking and no discovery, public relay, NAT/STUN,
+  telemetry or self-update path. Its original TLS bytes pass through Files'
+  authenticated Core streams; the installed node APIs are sufficient.
+- Added explicit folder invitations and pinned engine identities, private
+  per-core storage, import/replace, browsing/export, confirmed file deletion,
+  pause/resume, and stop-sharing with a separately deletable retained copy.
+  Persisted engine grants start paused until reconciled with Files' manifest.
+- Send and Sync share the receiver without keeping Send acceptance enabled.
+  A socket-backed regression passed an approved Send while Sync remained open.
+- Two actual engines passed two-way edits, deletion propagation with retained
+  versions, and independent offline changes creating a conflict copy through
+  encrypted bridges. Restart preserves identity and loopback-only settings.
+- All 77 ordinary Flutter tests across apps/SDK passed, plus the two opt-in
+  real-engine tests. Formatting, analysis and app dependency boundaries passed.
+  A Windows kernel job test verified that closing the owned handle terminates
+  the engine child; normal shutdown still requests a graceful database flush.
+- Foreground use and app-owned folders are the initial scope. Arbitrary Android
+  document trees, background hosting, multi-peer folders and version restore
+  remain future work. Drive is still unavailable.
+- Android release and Windows release packages were built with engine and
+  third-party notices. The Android publisher matches existing Core/VPN builds.
+  The phone was absent from ADB during these builds; the new APK has not been
+  installed or physically verified. Existing Send device results below refer
+  to the preceding Files build.
+
+See [Files Sync](files-sync.md) for architecture, reproducible builds and checks.
 
 ## First Files Send implementation, October 24, 2026
 

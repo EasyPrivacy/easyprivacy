@@ -1,17 +1,24 @@
 # EasyPrivacy Files
 
-An independently installable Android/Windows/Linux application with Send, Sync,
-and Drive surfaces. It uses the Core SDK for authorized connection status and
-will use Core's private stream broker for service data.
+An independently installable Files application using Core's authorized private
+streams. The current build supports Android ARM64 and Windows x64.
 
-The current development build provides the app structure and mode navigation.
-The SDK stream bridge is implemented and tested against the native runtime.
-Send, Sync, and Drive remain unavailable until their engine adapters and device
-integration have passed their implementation gates. No file server is
-installed or represented as healthy by this shell.
+Files 1.0.0+3 provides [approved, encrypted Send](../../docs/files-send.md) and
+[two-device folder Sync](../../docs/files-sync.md) using bundled Syncthing
+through Core. Both need Files open. Send has passed actual phone/laptop transfers;
+Sync has passed real-engine bridge tests and still needs physical phone testing.
+Sync initially owns its folders inside Files rather than synchronizing arbitrary
+Android document trees. Drive remains unavailable; no cloud server is installed.
 
 From the repository root:
+
+```powershell
     flutter pub get
-    ./tool/build-android.ps1 -App files -Debug
+    # Build the ARM64 engine in WSL using tool/build-sync-engine.sh first.
+    ./tool/build-sync-engine.ps1
+    ./tool/build-android.ps1 -App files
     ./tool/build-windows.ps1 -App files
-    bash tool/build-linux.sh files
+```
+
+The Linux app scaffold remains in the repository; its packaged engine lookup and
+end-to-end Files integration have not been validated.

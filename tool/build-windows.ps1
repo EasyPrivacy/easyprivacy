@@ -52,6 +52,12 @@ try {
     if ($App -eq 'core' -and -not (Test-Path -LiteralPath (Join-Path $stagedApp 'native/windows/easyprivacy_pairing.dll'))) {
         throw 'Run tool/build-pairing.ps1 before packaging Core.'
     }
+    if ($App -eq 'files') {
+        $syncEngine = Join-Path $appRoot 'native/windows/easyprivacy-sync.exe'
+        if (-not (Test-Path -LiteralPath $syncEngine)) { throw 'Run tool/build-sync-engine.ps1 before packaging Files.' }
+        New-Item -ItemType Directory -Force -Path (Join-Path $stagedApp 'native/windows') | Out-Null
+        Copy-Item -LiteralPath $syncEngine -Destination (Join-Path $stagedApp 'native/windows') -Force
+    }
     $plugins = Get-Content -Raw -LiteralPath (Join-Path $stagedApp '.flutter-plugins-dependencies') | ConvertFrom-Json
     $links = Join-Path $stagedApp 'windows/flutter/ephemeral/.plugin_symlinks'
     New-Item -ItemType Directory -Force -Path $links | Out-Null

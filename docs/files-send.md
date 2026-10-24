@@ -18,8 +18,9 @@ The existing 1.0.1~reorg1 node package already provides the necessary APIs.
    replacing an existing file. Saving successfully removes the app's retained copy.
 
 Send handles one active transfer at a time per app. Other devices must have Files
-receiving enabled; offline payload storage/forwarding is not provided. Sync and
-Drive remain separate unavailable tabs.
+receiving enabled; offline payload storage/forwarding is not provided. Folder
+Sync is implemented in Files 1.0.0+3; see [Files Sync](files-sync.md). Drive remains
+unavailable.
 
 ## Retry, storage and cancellation
 

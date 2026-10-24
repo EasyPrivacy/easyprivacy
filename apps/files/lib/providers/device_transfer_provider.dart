@@ -82,6 +82,70 @@ class DeviceTransferProvider extends ChangeNotifier {
   final PrivateServicesClient client;
   final Future<TransferFileStore> Function() storeFactory;
   final engine = SendEngine();
+  final handlers =
+      <
+        String,
+        Future<void> Function(
+          SecureTransferChannel,
+          TransferIdentity,
+          SendDevice,
+          Map<String, dynamic>,
+        )
+      >{};
+  final _receiverUsers = <String>{};
+  final _incomingChannels = <SecureTransferChannel>{};
+  bool get _needsReceiver =>
+      !_disposed && (receiving || _receiverUsers.isNotEmpty);
+  Future<List<SendDevice>> pairedDevices() => _devices();
+  Future<TransferIdentity> identity() => _identity();
+  Future<SecureTransferChannel> openPeer(SendDevice peer) async {
+    final current = (await _devices()).where(
+      (d) => d.id == peer.id && d.online,
+    );
+    if (current.length != 1) {
+      throw const TransferFailure(
+        'Open Files on the other device and try again.',
+      );
+    }
+    final stream = await client.open(current.single.service!);
+    final channel = SecureTransferChannel(
+      TransferLink(
+        incoming: stream.incoming,
+        sink: stream.sink,
+        close: stream.close,
+      ),
+    );
+    try {
+      await channel.handshake(await _identity(), recipient: peer.id);
+      return channel;
+    } catch (_) {
+      await channel.close();
+      rethrow;
+    }
+  }
+
+  Future<void> receiveFor(String mode, bool enabled) async {
+    if (enabled) {
+      _receiverUsers.add(mode);
+      await _ensureReceiver();
+    } else {
+      _receiverUsers.remove(mode);
+      await _closeUnusedReceiver();
+    }
+  }
+
+  Future<void> _closeUnusedReceiver() async {
+    if (_needsReceiver) return;
+    ++_receiveGeneration;
+    final id = _receiver;
+    _receiver = null;
+    if (id != null) {
+      try {
+        await client.closeReceiver(id);
+      } catch (_) {}
+    }
+  }
+
   final List<TransferJob> jobs = [];
   List<SendDevice> devices = [];
   bool receiving = false, refreshing = false, connected = false;
@@ -149,7 +213,9 @@ class DeviceTransferProvider extends ChangeNotifier {
         );
       }
       devices = await _devices();
-      if (receiving && DateTime.now().difference(_heartbeat).inSeconds >= 15) {
+      if (_needsReceiver &&
+          (_receiver == null ||
+              DateTime.now().difference(_heartbeat).inSeconds >= 15)) {
         final id = await client.registerReceiver();
         _heartbeat = DateTime.now();
         if (id != _receiver) {
@@ -216,22 +282,22 @@ class DeviceTransferProvider extends ChangeNotifier {
   Future<void> setReceiving(bool enabled) async {
     if (!enabled) {
       receiving = false;
-      ++_receiveGeneration;
       _connectionCancellation?.cancel();
       for (final job in jobs.where((j) => j.incoming && j.active)) {
         cancel(job);
       }
-      final id = _receiver;
-      _receiver = null;
-      if (id != null) {
-        try {
-          await client.closeReceiver(id);
-        } catch (_) {}
-      }
+      await _closeUnusedReceiver();
       changed();
       return;
     }
-    if (receiving || _disposed || _receiveStarting) return;
+    receiving = true;
+    await _ensureReceiver();
+    if (_receiver == null) receiving = false;
+    changed();
+  }
+
+  Future<void> _ensureReceiver() async {
+    if (_receiver != null || _disposed || _receiveStarting) return;
     _receiveStarting = true;
     final startGeneration = ++_receiveGeneration;
     try {
@@ -242,7 +308,6 @@ class DeviceTransferProvider extends ChangeNotifier {
         return;
       }
       _receiver = id;
-      receiving = true;
       error = null;
       _heartbeat = DateTime.now();
       unawaited(_listen(id, startGeneration));
@@ -256,33 +321,40 @@ class DeviceTransferProvider extends ChangeNotifier {
 
   Future<void> _listen(String id, int generation) async {
     try {
-      while (!_disposed && receiving && generation == _receiveGeneration) {
+      while (_needsReceiver && generation == _receiveGeneration) {
         final stream = await client.accept(id);
         if (stream == null) continue;
-        if (_disposed || generation != _receiveGeneration || _busy) {
+        if (_disposed ||
+            generation != _receiveGeneration ||
+            _incomingChannels.length >= 4) {
           await stream.close();
           continue;
         }
-        _busy = true;
-        try {
-          await _incoming(
-            SecureTransferChannel(
-              TransferLink(
-                incoming: stream.incoming,
-                sink: stream.sink,
-                close: stream.close,
-              ),
-            ),
-          );
-        } finally {
-          _busy = false;
-        }
-        changed();
+        final channel = SecureTransferChannel(
+          TransferLink(
+            incoming: stream.incoming,
+            sink: stream.sink,
+            close: stream.close,
+          ),
+        );
+        _incomingChannels.add(channel);
+        unawaited(
+          _incoming(channel)
+              .then<void>(
+                (_) {},
+                onError: (Object e) {
+                  error = e.toString();
+                  changed();
+                },
+              )
+              .whenComplete(() => _incomingChannels.remove(channel)),
+        );
       }
     } catch (e) {
       if (!_disposed && generation == _receiveGeneration) {
         error = e.toString();
-        await setReceiving(false);
+        _receiver = null;
+        changed();
       }
     }
   }
@@ -290,7 +362,7 @@ class DeviceTransferProvider extends ChangeNotifier {
   Future<void> _incoming(SecureTransferChannel channel) async {
     TransferJob? job;
     final cancellation = TransferCancellation()..attach(channel.cancel);
-    _connectionCancellation = cancellation;
+    var ownsSend = false;
     try {
       final identity = await _identity();
       final sender = await channel.handshake(identity);
@@ -298,8 +370,20 @@ class DeviceTransferProvider extends ChangeNotifier {
       final peer = peers.where((d) => d.id == sender).single;
       final message = await channel.readControl();
       if (message['type'] != 'offer') {
-        throw const TransferFailure('Expected a file offer.');
+        final handler = handlers[message['type']];
+        if (handler == null) {
+          throw const TransferFailure('Update Files to use this capability.');
+        }
+        await handler(channel, identity, peer, message);
+        return;
       }
+      if (!receiving || _busy) {
+        await channel.control({'type': 'decline'});
+        return;
+      }
+      _busy = true;
+      ownsSend = true;
+      _connectionCancellation = cancellation;
       final offer = TransferOffer.fromJson(message);
       if (offer.id !=
           TransferOffer.identifier(
@@ -369,7 +453,10 @@ class DeviceTransferProvider extends ChangeNotifier {
       await channel.close();
       if (cancellation.cancelled) await job?.record?.delete();
       job?.running = false;
-      _connectionCancellation = null;
+      if (ownsSend) _busy = false;
+      if (identical(_connectionCancellation, cancellation)) {
+        _connectionCancellation = null;
+      }
       changed();
     }
   }
@@ -502,6 +589,10 @@ class DeviceTransferProvider extends ChangeNotifier {
     _disposed = true;
     _timer?.cancel();
     _connectionCancellation?.cancel();
+    _receiverUsers.clear();
+    for (final channel in _incomingChannels.toList()) {
+      unawaited(channel.close());
+    }
     for (final job in jobs.where((j) => j.active)) {
       cancel(job);
     }
