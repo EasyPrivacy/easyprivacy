@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 type Linux struct {
 	config Config
 	peers  map[string]Peer
+	probe  net.Listener
 }
 
 func Cleanup(c Config) error { return (&Linux{config: c}).Down() }
@@ -67,14 +69,18 @@ func rules(c Config) []rule {
 		return rule{tool, table, chain, prefix}
 	}
 	// Insert drops first, then scoped accepts so the accepts precede the drops.
-	return []rule{
+	result := []rule{
 		makeRule("iptables", "filter", "FORWARD", "-i", Interface, "-j", "DROP"),
 		makeRule("iptables", "filter", "FORWARD", "-o", Interface, "-j", "DROP"),
-		makeRule("iptables", "filter", "FORWARD", "-i", c.Uplink, "-o", Interface, "-d", c.Subnet, "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"),
-		makeRule("iptables", "nat", "POSTROUTING", "-s", c.Subnet, "-o", c.Uplink, "-j", "MASQUERADE"),
 		makeRule("ip6tables", "filter", "FORWARD", "-i", Interface, "-j", "DROP"),
 		makeRule("ip6tables", "filter", "FORWARD", "-o", Interface, "-j", "DROP"),
 	}
+	if !c.PrivateOnly {
+		result = append(result,
+			makeRule("iptables", "filter", "FORWARD", "-i", c.Uplink, "-o", Interface, "-d", c.Subnet, "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"),
+			makeRule("iptables", "nat", "POSTROUTING", "-s", c.Subnet, "-o", c.Uplink, "-j", "MASQUERADE"))
+	}
+	return result
 }
 func setRules(c Config, remove bool) error {
 	return applyRules(rules(c), remove)
@@ -104,6 +110,10 @@ func applyRules(rules []rule, remove bool) error {
 	return nil
 }
 func (l *Linux) Up(c Config) (err error) {
+	if l.probe != nil {
+		_ = l.probe.Close()
+		l.probe = nil
+	}
 	l.config = c
 	l.peers = map[string]Peer{}
 	if e := c.Validate(); e != nil {
@@ -124,8 +134,13 @@ func (l *Linux) Up(c Config) (err error) {
 	if e = cleanupHomeRouting(); e != nil {
 		return e
 	}
-	if e := prepareHomeRouting(); e != nil {
+	if e := preparePrivateChain(); e != nil {
 		return e
+	}
+	if !c.PrivateOnly {
+		if e := prepareHomeRouting(); e != nil {
+			return e
+		}
 	}
 	forward, e := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
 	if e != nil || strings.TrimSpace(string(forward)) != "1" {
@@ -172,7 +187,10 @@ func (l *Linux) Up(c Config) (err error) {
 	if _, e = command("ip", "", "link", "set", "dev", Interface, "mtu", "1280", "up"); e != nil {
 		return e
 	}
-	return setRules(c, false)
+	if e = setRules(c, false); e != nil {
+		return e
+	}
+	return l.startPrivateProbe(c)
 }
 func (l *Linux) SetPeer(c Config, p Peer) error {
 	if l.peers == nil {
@@ -192,6 +210,9 @@ func (l *Linux) SetPeer(c Config, p Peer) error {
 		return err
 	}
 	allowed := c.Address(p.Host) + "," + fmt.Sprintf("%s%x/128", IPv6Prefix, p.Host)
+	if p.Purpose == PrivatePurpose {
+		allowed = c.Address(p.Host)
+	}
 	if p.Service {
 		allowed = "0.0.0.0/0"
 	}
@@ -248,6 +269,10 @@ func interfaceStatus(iface, key string) (Status, error) {
 	return s, nil
 }
 func (l *Linux) Down() error {
+	if l.probe != nil {
+		_ = l.probe.Close()
+		l.probe = nil
+	}
 	owned, e := ownedInterface()
 	if e != nil {
 		return e
@@ -261,6 +286,9 @@ func (l *Linux) Down() error {
 	}
 	l.peers = map[string]Peer{}
 	if e = cleanupCoreRules(); e != nil {
+		return e
+	}
+	if e = cleanupPrivateChain(); e != nil {
 		return e
 	}
 	return cleanupHomeRouting()
@@ -309,7 +337,7 @@ func cleanupCoreRules() error {
 		host, err := strconv.Atoi(strings.TrimPrefix(tag, "easyprivacy-peer-"))
 		return err == nil && host >= 2 && host <= 254
 	}
-	for _, r := range [][3]string{{"iptables", "filter", "FORWARD"}, {"iptables", "nat", "POSTROUTING"}, {"ip6tables", "filter", "FORWARD"}} {
+	for _, r := range [][3]string{{"iptables", "filter", "FORWARD"}, {"iptables", "filter", "INPUT"}, {"iptables", "nat", "POSTROUTING"}, {"ip6tables", "filter", "FORWARD"}} {
 		if err := removeTaggedRules(r[0], r[1], r[2], match); err != nil {
 			return err
 		}

@@ -252,6 +252,11 @@ reachability; another firewall rule or network policy can still block access.
 
 ## Upgrade / remove
 
+For the Core/VPN app split development candidate, follow the
+[private-network update guide](../docs/private-network-upgrade.md). It includes
+backup/rollback steps and private-only setup with `easyprivacy-node network-setup`.
+Existing Internet/Home exit settings remain compatible.
+
 ```bash
 sudo apt install ./easyprivacy-node_VERSION_amd64.deb
 sudo apt remove easyprivacy-node

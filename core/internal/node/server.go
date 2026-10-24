@@ -74,6 +74,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/vpn/service", s.vpnService)
 	mux.HandleFunc("POST /api/v1/vpn/disconnect", s.vpnDisconnect)
 	mux.HandleFunc("GET /api/v1/vpn/status", s.vpnStatus)
+	mux.HandleFunc("POST /api/v2/network/private/peer", s.privatePeer)
+	mux.HandleFunc("POST /api/v2/network/private/disconnect", s.privateDisconnect)
+	mux.HandleFunc("GET /api/v2/network/private/status", s.privateStatus)
+	mux.HandleFunc("GET /api/v2/network/private/services", s.privateServices)
+	mux.HandleFunc("POST /api/v2/network/private/receiver", s.privateReceiver)
+	mux.HandleFunc("POST /api/v2/network/private/receiver/disconnect", s.privateReceiverDisconnect)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

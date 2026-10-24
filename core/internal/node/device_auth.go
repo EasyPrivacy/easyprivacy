@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"fmt"
+	"github.com/easyprivacy/easyprivacy/core/internal/vpn"
 	"net/http"
 	"time"
 )
@@ -152,7 +153,11 @@ func (s *Server) revokeLocked(id string) error {
 		s.clearPairingsLocked()
 	}
 	if s.vpn != nil {
-		if err := s.vpn.Remove(id); err != nil {
+		remove := s.vpn.Remove
+		if control, ok := s.vpn.(vpn.DeviceControl); ok {
+			remove = control.RemoveDevice
+		}
+		if err := remove(id); err != nil {
 			return fmt.Errorf("device revoked; VPN removal could not be confirmed: %w", err)
 		}
 	}

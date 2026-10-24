@@ -75,6 +75,7 @@ if [ "$1" = configure ]; then
     else
         printf '\nTo allow the configured port in active UFW: sudo easyprivacy-node firewall\n\n'
         printf 'Pair a device with: sudo easyprivacy-node pair\n\n'
+        printf 'Enable private services without an Internet exit: sudo easyprivacy-node network-setup\n\n'
         printf 'Enable this VPS as an Internet exit with: sudo easyprivacy-node vpn-setup\n\n'
     fi
 fi

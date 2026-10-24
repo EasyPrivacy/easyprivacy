@@ -1,0 +1,123 @@
+import 'package:flutter/material.dart';
+import 'package:easyprivacy_core_sdk/easyprivacy_core_sdk.dart';
+import 'package:easyprivacy_ui/easyprivacy_ui.dart';
+
+class EasyPrivacyFilesApp extends StatefulWidget {
+  const EasyPrivacyFilesApp({super.key, this.connection});
+  final BrokerCoreConnection? connection;
+  @override
+  State<EasyPrivacyFilesApp> createState() => _EasyPrivacyFilesAppState();
+}
+
+class _EasyPrivacyFilesAppState extends State<EasyPrivacyFilesApp> {
+  late final core =
+      widget.connection ?? BrokerCoreConnection(capability: 'files');
+  @override
+  void dispose() {
+    if (widget.connection == null) core.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'EasyPrivacy Files',
+    theme: buildEasyPrivacyTheme(),
+    debugShowCheckedModeBanner: false,
+    home: DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('EasyPrivacy Files'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.send_outlined), text: 'Send'),
+              Tab(icon: Icon(Icons.sync), text: 'Sync'),
+              Tab(icon: Icon(Icons.cloud_outlined), text: 'Drive'),
+            ],
+          ),
+        ),
+        body: ListenableBuilder(
+          listenable: core,
+          builder: (context, _) => Column(
+            children: [
+              Material(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                child: ListTile(
+                  leading: Icon(core.hasSession ? Icons.link : Icons.link_off),
+                  title: Text(
+                    core.hasSession
+                        ? (core.coreName ?? 'Core connected')
+                        : (core.error ?? 'Connect through EasyPrivacy Core'),
+                  ),
+                  trailing: IconButton(
+                    onPressed: core.refresh,
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Check Core',
+                  ),
+                ),
+              ),
+              const Expanded(
+                child: TabBarView(
+                  children: [
+                    _Mode(
+                      icon: Icons.send_outlined,
+                      title: 'Send to a device',
+                      description:
+                          'Send files to an online paired phone or computer without creating a shared folder.',
+                    ),
+                    _Mode(
+                      icon: Icons.sync,
+                      title: 'Keep folders in sync',
+                      description:
+                          'Choose folders and devices to keep local copies synchronized.',
+                    ),
+                    _Mode(
+                      icon: Icons.cloud_outlined,
+                      title: 'Your private Drive',
+                      description:
+                          'Store files on your own server and access them even when your other devices are offline.',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _Mode extends StatelessWidget {
+  const _Mode({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+  final IconData icon;
+  final String title, description;
+  @override
+  Widget build(BuildContext context) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 56, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 20),
+            Text(title, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            Text(description, textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            const Text(
+              'This capability is not available in this development build.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}

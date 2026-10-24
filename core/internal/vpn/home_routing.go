@@ -70,6 +70,15 @@ func peerRules(c Config, p Peer) []rule {
 	if p.Service {
 		return nil
 	}
+	if p.Purpose == PrivatePurpose {
+		// The dedicated chain has a terminal DROP and only leased receiver grants.
+		jump := makeRule("-i", Interface, "-s", address, "-j", privateChain)
+		drop := makeRule("-i", Interface, "-s", address, "-j", "DROP")
+		drop.chain = "INPUT"
+		probe := makeRule("-i", Interface, "-s", address, "-d", c.Address(1), "-p", "tcp", "--dport", fmt.Sprint(PrivateProbePort), "-j", "ACCEPT")
+		probe.chain = "INPUT"
+		return []rule{jump, drop, probe}
+	}
 	if p.ExitID != "home" {
 		return []rule{makeRule("-i", Interface, "-o", c.Uplink, "-s", address, "-j", "ACCEPT")}
 	}

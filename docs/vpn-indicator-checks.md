@@ -5,7 +5,9 @@ is deferred; its home service controls are unchanged.
 
 ## Automated checks
 
-Run `flutter analyze` and `flutter test` from `app/`. The indicator tests cover
+Run `tool/check-workspace.ps1` from the repository root. During the migration,
+the inherited indicator regression tests remain in `apps/core/test/`; the
+separate VPN app uses `packages/easyprivacy_vpn_feature/`. The tests cover
 connected-only visibility, visibility during a management disconnection, quick
 actions, restoring the last exit after a cold notification launch, permission
 denial, setting persistence failures and the settings control before sign-in.

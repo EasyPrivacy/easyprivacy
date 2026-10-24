@@ -31,7 +31,7 @@ def main():
     args=parser.parse_args()
     core=Path(__file__).resolve().parents[1]
     binary=core/'dist/easyprivacy-node-linux-amd64'
-    app=core.parent/'app'
+    app=core.parent/'apps'/'core'
     host=subprocess.check_output(['hostname','-I'],text=True).split()[0]
     with tempfile.TemporaryDirectory(prefix='easyprivacy-pairing-smoke-') as temp:
         directory=Path(temp)/'core'; directory.mkdir(mode=0o700)

@@ -9,8 +9,14 @@ import (
 )
 
 type fakeBackend struct {
-	peers map[string]Peer
-	fail  string
+	peers  map[string]Peer
+	fail   string
+	grants []PrivateGrant
+}
+
+func (b *fakeBackend) SetPrivateAccess(grants []PrivateGrant) error {
+	b.grants = append([]PrivateGrant{}, grants...)
+	return nil
 }
 
 func (b *fakeBackend) Up(Config) error { return nil }

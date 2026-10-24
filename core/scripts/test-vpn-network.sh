@@ -9,7 +9,7 @@ cd "$root"
 "${EASYPRIVACY_GO:-go}" test -c -o "$temp/vpn.test" ./internal/vpn
 # /run is replaced only inside a private mount namespace: named network
 # namespaces, forwarding, routes and firewall rules never touch the host.
-for test in TestLinuxWireGuardInternetDNSIPv6AndRevocation TestLinuxRoutedHomeExit; do
+for test in TestLinuxWireGuardInternetDNSIPv6AndRevocation TestLinuxRoutedHomeExit TestLinuxPrivateReceiverIsolation; do
 unshare --mount --net --propagation private bash -c '
   mount -t tmpfs tmpfs /run
   mkdir /run/netns

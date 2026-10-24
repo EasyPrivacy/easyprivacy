@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Begin Core/VPN/Files application separation with a shared Pub workspace,
+  public model/UI packages, scoped Core control broker, and separate app builds.
+- Preserve the combined application VPN migration controls and enrollment storage.
+- Add independent private-service peer records and v2 network APIs, including
+  parent revocation and a legacy peer-state rollback snapshot.
+- Connect Core's userspace WireGuard runtime to the production broker and shared
+  SDK through pinned local TLS streams, with capability revocation and bounded
+  single-use tickets. Keep Files engines explicitly unavailable in its shell.
+- Add private-only node setup, a diagnostic probe, service discovery and expiring
+  Files receiver grants with scoped firewall rules. Preserve existing VPN state.
+
 - Restore EasyPrivacy launcher, taskbar and title-bar icons missing from the
   feature's older dev base, and use the brand mark in Android notifications.
 

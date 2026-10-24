@@ -25,6 +25,14 @@ type ServiceControl interface {
 	RegisterExit(string, string, string) (Profile, error)
 	RegisterService(string, string, string, ...string) (ServiceProfile, error)
 }
+type PrivateControl interface {
+	RegisterPrivate(string, string) (PrivateProfile, error)
+	RemovePrivate(string) error
+	PrivateStatus(string) (Status, error)
+}
+
+type DeviceControl interface{ RemoveDevice(string) error }
+
 type Client struct {
 	SocketPath   string
 	ConfigMarker string

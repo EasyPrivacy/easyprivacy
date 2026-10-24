@@ -230,6 +230,26 @@ esac
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         print("PASS: installed firewall command uses the saved port, fixes the locale, and preserves credentials on repeated runs (UFW fixture).", flush=True)
 
+        # Synthetic operator configuration: package changes must preserve its
+        # traffic key, endpoint, subnet, legacy peers and private permissions.
+        vpn_config = vpn_dir / 'vpn.json'
+        vpn_config.write_text(json.dumps({'schema': 1, 'name': 'Package fixture',
+            'endpoint': 'example.test:51821', 'port': 51821, 'subnet': '10.87.0.0/24',
+            'uplink': 'eth0', 'dns': ['1.1.1.1'],
+            'private_key': base64.b64encode(bytes(range(1, 33))).decode()}))
+        vpn_config.chmod(0o600)
+        vpn_peers = vpn_dir / 'peers.json'
+        vpn_peers.write_text('[]\n')
+        vpn_peers.chmod(0o600)
+        vpn_original = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in (vpn_config, vpn_peers)}
+
+        def assert_vpn_preserved():
+            for name, digest in vpn_original.items():
+                path = vpn_dir / name
+                assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+                assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
         staging = Path(temp) / "upgrade"
         run(["dpkg-deb", "--raw-extract", str(args.package), str(staging)])
         control = staging / "DEBIAN/control"
@@ -237,19 +257,25 @@ esac
         control.write_text("\n".join(line + "+test1" if line.startswith("Version:") else line for line in lines) + "\n")
         run(["dpkg-deb", "--root-owner-group", "--build", str(staging), str(root / "tmp/upgrade.deb")])
         inside("dpkg", "--install", "/tmp/upgrade.deb")
+        assert_vpn_preserved()
+        assert os.path.lexists(root/'etc/systemd/system/multi-user.target.wants/easyprivacy-vpn.service')
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         assert hashlib.sha256(database.read_bytes()).hexdigest()==devices_original
         assert log.read_text().splitlines() == ["status", f"allow {port}/tcp"] * 2
         inside("dpkg", "--remove", "easyprivacy-node")
+        assert_vpn_preserved()
         assert not (root / "usr/bin/easyprivacy-node").exists()
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         inside("dpkg", "--install", "/tmp/easyprivacy.deb")
+        assert_vpn_preserved()
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         inside("dpkg", "--purge", "easyprivacy-node")
+        assert_vpn_preserved()
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         assert hashlib.sha256(database.read_bytes()).hexdigest()==devices_original
         assert not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants/easyprivacy-node.service")
         print("PASS: upgrade, remove, reinstall and purge preserve the existing core identity and credentials.", flush=True)
+        print("PASS: VPN traffic key, endpoint, subnet, legacy peers and private permissions survive package changes.", flush=True)
     print("Package test root removed; the host installation was not changed.", flush=True)
 
 

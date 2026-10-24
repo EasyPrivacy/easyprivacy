@@ -32,22 +32,26 @@ func runVPN(command string, args []string) error {
 	if fs.NArg() != 0 {
 		return errors.New("unexpected VPN arguments")
 	}
-	if command == "vpn-status" {
+	if command == "vpn-status" || command == "network-status" {
 		v, e := (vpn.Client{SocketPath: *socket}).Info()
 		if e != nil {
 			return e
 		}
-		fmt.Printf("VPN exit: %s (%s)\nReady: %t\n", v.Name, v.ID, v.Ready)
+		if command == "network-status" {
+			fmt.Printf("Network helper: %s\nInternet exit enabled: %t\n%s\n", v.Name, v.Ready, v.Message)
+		} else {
+			fmt.Printf("VPN exit: %s (%s)\nReady: %t\n", v.Name, v.ID, v.Ready)
+		}
 		return nil
 	}
 	if os.Geteuid() != 0 {
 		return errors.New("run VPN setup/administration with sudo")
 	}
-	if command == "vpn-setup" {
+	if command == "vpn-setup" || command == "network-setup" {
 		if *coreDir != node.DefaultStateDir || *dir != vpn.Directory || *socket != vpn.Socket {
 			return errors.New("VPN setup configures the installed node; omit directory overrides")
 		}
-		return vpnSetup()
+		return networkSetup(command == "network-setup")
 	}
 	c, e := vpn.LoadConfig(*dir)
 	if e != nil {
@@ -92,12 +96,16 @@ func runVPN(command string, args []string) error {
 }
 
 func cleanupVPN(c vpn.Config) error { return vpn.Cleanup(c) }
-func vpnSetup() error {
+func vpnSetup() error               { return networkSetup(false) }
+func networkSetup(privateOnly bool) error {
 	state, e := node.Load(node.DefaultStateDir)
 	if e != nil {
 		return fmt.Errorf("complete core setup first: %w", e)
 	}
 	if c, e := vpn.LoadConfig(vpn.Directory); e == nil {
+		if !privateOnly && c.PrivateOnly {
+			return enableInternetExit(c)
+		}
 		return enableVPN(c)
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return e
@@ -105,7 +113,11 @@ func vpnSetup() error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return errors.New("VPN setup needs an interactive terminal")
 	}
-	fmt.Println("EasyPrivacy VPN exit setup\nThe VPS will carry IPv4 Internet traffic. IPv6 is blocked through this first exit.")
+	if privateOnly {
+		fmt.Println("EasyPrivacy private network setup\nEnable encrypted private services without an Internet exit.")
+	} else {
+		fmt.Println("EasyPrivacy VPN exit setup\nThe VPS will carry IPv4 Internet traffic. IPv6 is blocked through this first exit.")
+	}
 	reader := bufio.NewReader(os.Stdin)
 	ask := func(label, def string) (string, error) {
 		fmt.Printf("%s [%s]: ", label, def)
@@ -151,23 +163,32 @@ func vpnSetup() error {
 	if e != nil {
 		return e
 	}
-	uplink, e = ask("Internet network interface", uplink)
-	if e != nil {
-		return e
-	}
-	dns, e := ask("DNS servers, comma-separated", "1.1.1.1,9.9.9.9")
-	if e != nil {
-		return e
-	}
-	dnsValues := strings.Split(dns, ",")
-	for i := range dnsValues {
-		dnsValues[i] = strings.TrimSpace(dnsValues[i])
+	var dnsValues []string
+	if !privateOnly {
+		uplink, e = ask("Internet network interface", uplink)
+		if e != nil {
+			return e
+		}
+		dns, e := ask("DNS servers, comma-separated", "1.1.1.1,9.9.9.9")
+		if e != nil {
+			return e
+		}
+		dnsValues = strings.Split(dns, ",")
+		for i := range dnsValues {
+			dnsValues[i] = strings.TrimSpace(dnsValues[i])
+		}
+	} else {
+		uplink = ""
 	}
 	key, e := vpn.GenerateKey()
 	if e != nil {
 		return e
 	}
 	c := vpn.Config{Schema: 1, Name: state.Name, Endpoint: net.JoinHostPort(strings.Trim(host, "[]"), strconv.Itoa(port)), Port: port, Subnet: subnet, Uplink: uplink, DNS: dnsValues, PrivateKey: key}
+	if privateOnly {
+		c.Schema = 2
+		c.PrivateOnly = true
+	}
 	if e = c.Validate(); e != nil {
 		return e
 	}
@@ -202,7 +223,7 @@ func enableVPN(c vpn.Config) error {
 	if e := os.WriteFile(filepath.Join(node.DefaultStateDir, "vpn-enabled"), []byte("1\n"), 0644); e != nil {
 		return e
 	}
-	if e := os.WriteFile("/etc/sysctl.d/70-easyprivacy-vpn.conf", []byte("# EasyPrivacy VPN IPv4 forwarding\nnet.ipv4.ip_forward = 1\n"), 0644); e != nil {
+	if e := os.WriteFile("/etc/sysctl.d/70-easyprivacy-vpn.conf", []byte("# EasyPrivacy private network IPv4 forwarding\nnet.ipv4.ip_forward = 1\n"), 0644); e != nil {
 		return e
 	}
 	if e := exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run(); e != nil {
@@ -242,6 +263,72 @@ func enableVPN(c vpn.Config) error {
 	if e != nil {
 		return fmt.Errorf("VPN service not ready; inspect sudo journalctl -u easyprivacy-vpn: %w", e)
 	}
-	fmt.Printf("VPN exit ready: %s\nEndpoint: %s\nAllow inbound UDP %d in the VPS provider firewall.\nConnect to this core in EasyPrivacy and choose Connect VPN.\n", info.Name, c.Endpoint, c.Port)
+	if c.PrivateOnly {
+		fmt.Printf("Private network ready: %s\nEndpoint: %s\nAllow inbound UDP %d in the provider firewall. Internet exits remain disabled.\n", info.Name, c.Endpoint, c.Port)
+	} else {
+		fmt.Printf("VPN exit ready: %s\nEndpoint: %s\nAllow inbound UDP %d in the VPS provider firewall.\nConnect to this core in EasyPrivacy and choose Connect VPN.\n", info.Name, c.Endpoint, c.Port)
+	}
 	return nil
+}
+
+func enableInternetExit(c vpn.Config) error {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return errors.New("Internet exit setup needs an interactive terminal")
+	}
+	fmt.Println("Enable the Internet exit on the existing private network. Device keys, endpoint and addresses are preserved.")
+	output, err := exec.Command("ip", "-4", "route", "show", "default").Output()
+	if err != nil {
+		return err
+	}
+	fields := strings.Fields(string(output))
+	detected := ""
+	for i, f := range fields {
+		if f == "dev" && i+1 < len(fields) {
+			detected = fields[i+1]
+			break
+		}
+	}
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("Internet network interface [%s]: ", detected)
+	uplink, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	uplink = strings.TrimSpace(uplink)
+	if uplink == "" {
+		uplink = detected
+	}
+	fmt.Print("DNS servers, comma-separated [1.1.1.1,9.9.9.9]: ")
+	dns, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	dns = strings.TrimSpace(dns)
+	if dns == "" {
+		dns = "1.1.1.1,9.9.9.9"
+	}
+	c.PrivateOnly = false
+	c.Uplink = uplink
+	c.DNS = strings.Split(dns, ",")
+	for i := range c.DNS {
+		c.DNS[i] = strings.TrimSpace(c.DNS[i])
+	}
+	if err = c.Validate(); err != nil {
+		return err
+	}
+	path := filepath.Join(vpn.Directory, "vpn.json")
+	var previous vpn.Config
+	if err = vpn.ReadPrivate(path, &previous); err != nil {
+		return err
+	}
+	if err = vpn.SavePrivate(filepath.Join(vpn.Directory, "vpn.pre-internet.json"), previous); err != nil {
+		return err
+	}
+	if err = vpn.SavePrivate(path, c); err != nil {
+		return err
+	}
+	if err = exec.Command("systemctl", "restart", "easyprivacy-vpn.service").Run(); err != nil {
+		return err
+	}
+	return enableVPN(c)
 }

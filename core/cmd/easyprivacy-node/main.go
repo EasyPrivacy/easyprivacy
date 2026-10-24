@@ -44,7 +44,7 @@ func run() error {
 	if strings.HasPrefix(command, "service-") {
 		return runService(command, os.Args[2:])
 	}
-	if strings.HasPrefix(command, "vpn-") {
+	if strings.HasPrefix(command, "vpn-") || strings.HasPrefix(command, "network-") {
 		return runVPN(command, os.Args[2:])
 	}
 	if command == "version" {

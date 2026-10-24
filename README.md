@@ -42,6 +42,9 @@ connects outbound through the VPS without a public IP or router port forwarding.
 The two VPN legs are encrypted, and the VPS is trusted with forwarding between
 them. IPv4 traffic and DNS use the selected exit; IPv6 remains blocked in the VPN.
 
+The development branch is separating Core, VPN, and Files into independent apps.
+See the implementation status linked below for completed and pending work.
+
 The project is now moving to one focused feature at a time. Broader platform
 capabilities described above remain the long-term direction; see the release
 notes for the scope and limitations of the completed MVP.
@@ -49,7 +52,11 @@ notes for the scope and limitations of the completed MVP.
 - [Ubuntu package installation and setup](core/README.md)
 - [V1.0.0 release notes and upgrades](docs/releases/1.0.0.md)
 - [Home exit installation and management access](docs/home-service-node.md)
-- [Desktop / Android app](app/README.md)
+- [Core management application](apps/core/README.md)
+- [Optional Internet VPN application](apps/vpn/README.md)
+- [Files application development status](apps/files/README.md)
+- [App reorganization implementation status](docs/app-reorganization-progress.md)
+- [Private-network development update and rollback](docs/private-network-upgrade.md)
 - [Device pairing and authorization](docs/device-pairing.md)
 - [Agreed scope and practical requirements](docs/mvp-revamp.md)
 - [Connection milestone and local validation](docs/connection-milestone.md)

@@ -1,0 +1,12 @@
+name: easyprivacy_workspace
+publish_to: none
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+workspace:
+  - apps/core
+  - apps/vpn
+  - apps/files
+  - packages/easyprivacy_protocol
+  - packages/easyprivacy_core_sdk
+  - packages/easyprivacy_ui
+  - packages/easyprivacy_vpn_feature

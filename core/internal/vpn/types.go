@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const Interface = "epwg0"
@@ -23,14 +24,15 @@ const Directory = "/var/lib/easyprivacy-vpn"
 const IPv6Prefix = "fd6e:7072:6976::"
 
 type Config struct {
-	Schema     int      `json:"schema"`
-	Name       string   `json:"name"`
-	Endpoint   string   `json:"endpoint"`
-	Port       int      `json:"port"`
-	Subnet     string   `json:"subnet"`
-	Uplink     string   `json:"uplink"`
-	DNS        []string `json:"dns"`
-	PrivateKey string   `json:"private_key"`
+	Schema      int      `json:"schema"`
+	PrivateOnly bool     `json:"private_only,omitempty"`
+	Name        string   `json:"name"`
+	Endpoint    string   `json:"endpoint"`
+	Port        int      `json:"port"`
+	Subnet      string   `json:"subnet"`
+	Uplink      string   `json:"uplink"`
+	DNS         []string `json:"dns"`
+	PrivateKey  string   `json:"private_key"`
 }
 type Exit struct {
 	ID      string `json:"id"`
@@ -51,7 +53,34 @@ type Profile struct {
 	Keepalive        int      `json:"keepalive"`
 	ManagementRoutes []string `json:"management_routes,omitempty"`
 }
+
+const PrivatePurpose = "private-services"
+
+type PrivateProfile struct {
+	Protocol  int           `json:"protocol"`
+	PublicKey string        `json:"public_key"`
+	Endpoint  string        `json:"endpoint"`
+	Address   string        `json:"address"`
+	Subnet    string        `json:"subnet"`
+	MTU       int           `json:"mtu"`
+	Keepalive int           `json:"keepalive"`
+	Probe     PrivateTarget `json:"probe"`
+}
+
+const PrivateProbePort = 41930
+const FilesReceiverPort = 41931
+
+type PrivateTarget struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	DeviceID  string     `json:"device_id,omitempty"`
+	Address   string     `json:"address"`
+	Port      int        `json:"port"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
 type Peer struct {
+	Purpose    string `json:"purpose,omitempty"`
 	DeviceID   string `json:"device_id"`
 	PublicKey  string `json:"public_key"`
 	Host       int    `json:"host"`
@@ -129,7 +158,7 @@ func (c Config) PublicKey() string {
 	return base64.StdEncoding.EncodeToString(k.PublicKey().Bytes())
 }
 func (c Config) Validate() error {
-	if c.Schema != 1 || strings.TrimSpace(c.Name) == "" || len(c.Name) > 80 || strings.ContainsAny(c.Name, "\r\n\x00") {
+	if (c.Schema != 1 && c.Schema != 2) || (c.PrivateOnly && c.Schema != 2) || strings.TrimSpace(c.Name) == "" || len(c.Name) > 80 || strings.ContainsAny(c.Name, "\r\n\x00") {
 		return errors.New("invalid VPN name or schema")
 	}
 	h, p, e := net.SplitHostPort(c.Endpoint)
@@ -144,6 +173,13 @@ func (c Config) Validate() error {
 	n, e := netip.ParsePrefix(c.Subnet)
 	if e != nil || !n.Addr().Is4() || !n.Addr().IsPrivate() || n.Bits() != 24 || n != n.Masked() {
 		return errors.New("choose a private IPv4 /24 network, for example 10.87.0.0/24")
+	}
+	if c.PrivateOnly {
+		if c.Uplink != "" || len(c.DNS) != 0 {
+			return errors.New("private-only networking cannot configure an Internet uplink or device DNS")
+		}
+		_, e = Key(c.PrivateKey)
+		return e
 	}
 	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$`).MatchString(c.Uplink) || c.Uplink == Interface || strings.HasPrefix(c.Uplink, "wg") {
 		return errors.New("select the physical Internet uplink interface")

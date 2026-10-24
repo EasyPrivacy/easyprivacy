@@ -1,0 +1,209 @@
+# App reorganization: implementation status
+
+Branch: codex/reorg-app. Updated October 24, 2026.
+The app split and private-service networking foundation are implemented.
+This is a development migration; Files engines and extended device validation
+remain pending. The owner installed the node update; the physical smoke test
+below verified the private path and EasyPrivacy VPN coexistence.
+
+## Implemented
+
+- Three Flutter projects: apps/core, apps/vpn and apps/files, with shared
+  protocol, Core SDK, UI and optional VPN feature packages in one Pub workspace.
+- Core retains its Android ID and Windows storage product metadata. Companion
+  apps have distinct identities and cannot import Core's private enrollment,
+  pairing, owner session or vault implementation.
+- Core owns management and private connectivity; VPN owns its own Internet
+  traffic key and system tunnel. Files remains the Send/Sync/Drive shell.
+- Scoped broker control: Android verifies caller UID, publisher and package;
+  desktop uses a protected per-user endpoint (a local-user trust boundary).
+  Controls have a 16 KiB UTF-8 budget, 16 pending operations and 20-second
+  deadlines. Timed-out dispatched operations retain their slots until settled.
+- Explicit VPN/Files grants. Revoking Files closes its streams, invalidates
+  tickets/pending work and removes its receiver. A background check supplements
+  the immediate UI notification.
+- Production Core-to-native integration: a private child process hosts
+  WireGuard/gVisor without an OS TUN or default route. Keys travel over its
+  anonymous control pipe, rather than process arguments. Core starts/stops and
+  verifies the connection using a nonce probe.
+- The SDK exposes full-duplex private streams through pinned TLS 1.3 loopback
+  sockets. File bytes bypass Binder/JSON control messages. Tickets are single
+  use, capability scoped, bounded and short lived. Receiver lease IDs guard
+  against stale address reuse.
+- Android foreground hosting and APK-owned native executable packaging. The
+  optional EasyPrivacy VPN excludes Core's UID to keep its encrypted private
+  outer connection independent of that full tunnel. Previous VPN connection
+  controls are collapsed for migration.
+- Additive node v2 membership/discovery/receiver APIs. Private-service keys and
+  addresses are separate from Internet/Home peers; parent revocation removes
+  every purpose and receiver grant.
+- Explicit receiver firewall policy: private peers reach only the overlay probe
+  and active Files receivers. Other private forwarding and core-local access
+  are dropped. Receivers expire after 120 seconds and are renewed by Core.
+- Independent network-setup mode has no Internet NAT/uplink/DNS. Existing
+  Internet deployments retain schema-1 settings and behavior. vpn-setup can
+  later enable an Internet exit while preserving network identity.
+- peers.pre-private.json snapshots legacy peer state before the first
+  purpose-aware write. Update/rollback steps are in
+  [the node upgrade guide](private-network-upgrade.md).
+
+## Verified for this slice
+
+- All 53 Flutter tests, formatting, analysis and dependency/identity boundaries.
+- The Dart SDK against two actual Windows native helper processes: 3 MiB
+  WireGuard transfer, SHA-256 integrity, full-duplex receipt, certificate-pin
+  rejection, ticket replay denial, receiver closure and capability revocation.
+- Node and native-runtime Go race tests and vet.
+- Three isolated real-kernel network suites: Internet NAT/DNS/IPv6/revocation;
+  routed Home exit/outage/restart; private-only receiver transfer, probe,
+  port/peer isolation, lease expiry/removal/revocation and firewall cleanup.
+- Disposable Ubuntu 24.04.4 amd64 package tests: baseline 1.0.0 upgrade,
+  unprivileged TLS/admin operation, systemd unit validation, helper capability
+  positive/negative controls, UFW behavior, and state preservation through
+  upgrade/remove/reinstall/purge. Core identity, enrollment database, VPN key,
+  endpoint, subnet, legacy peers and private permissions were retained.
+- Development Debian packages 1.0.1~reorg1 for amd64 and arm64. The arm64 package
+  was cross-built and inspected; its installation was not run on ARM hardware.
+- Core 1.0.0+9 and VPN 1.0.0+2 ARM64 release APK builds, with Core's pairing and
+  private-runtime artifacts included. The phone was disconnected for these
+  builds; their subsequent install is recorded below.
+  Package IDs, version codes and publisher signatures were verified. The APK's
+  runtime matches the NDK-stripped staged binary.
+- Native runtime binaries built for Android ARM64, Windows x64 and Linux x64.
+
+Earlier foundation checks also built Windows VPN/Files bundles and a Linux Core
+bundle/desktop Debian package. Those earlier bundles predate this private-data
+slice. Core Windows packaging still requires its native Windows pairing DLL.
+
+## Remaining gates and follow-on work
+
+- Complete outages, longer background operation and additional VPN providers/
+  settings remain further private-path checks. Wi-Fi/mobile handovers and
+  Proton VPN coexistence passed the additional test below. The owner deferred
+  extended screen-lock testing to ongoing personal use; it is not marked passed.
+- Full Android caller-denial coverage, device packet-level routing/leak checks,
+  production signing/key rotation and migration release testing.
+- Implement actual Files Send, folder synchronization and Drive engines, their
+  file permissions/UI, application-level end-to-end file protection and hosted
+  service installation. Current receivers are transport groundwork.
+- Automatic client startup at boot and complete crash/OS-kill recovery remain
+  future work. A stopped private runtime can be restarted from Core.
+
+## Updated Android install, October 24, 2026
+
+- Updated the connected Pixel 10 in place to Core 1.0.0+9 and VPN 1.0.0+2
+  using the verified release APKs. Both Android installations succeeded and
+  their package version codes were confirmed. Both apps launched.
+- Core retained its enrollment, reconnected automatically and retained the
+  existing VPN capability grant. The new private connection controls and the
+  collapsed legacy VPN migration panel were visible.
+- At installation, the owner confirmed the node update had not yet been applied. Against
+  the older node, Start private connection displayed the expected upgrade
+  guidance, returned to stopped state and cleared the service's started/
+  foreground state. The management connection remained connected.
+- This initial check verified installation and the older-node failure path.
+
+## Updated-node Android smoke test, October 24, 2026
+
+- After the owner applied the VPS update, Core reported 1.0.1~reorg1 and
+  remained connected using the retained enrollment.
+- Verified private connection checks on the phone and two stop/start cycles,
+  including one while EasyPrivacy VPN was active. Startup completed its
+  end-to-end 32-byte WireGuard nonce check after each reconnect.
+- Observed the APK-packaged native child process running under Core and the
+  connected-device foreground service active. Stop removed the child process
+  and cleared the service's started/foreground state; restart created one new
+  runtime. The private connection also persisted through short backgrounding
+  and app switching.
+- EasyPrivacy VPN connected with a successful handshake and nonzero receive/
+  send counters. Core management and its private connection remained available
+  alongside it. Repeated the private check with both enabled.
+- Disconnected the temporary Internet VPN test and checked the private path
+  again. Restored the initial state: private connection enabled, Internet VPN
+  disconnected, Core screen visible.
+- This was a quick functional test, not a packet-level Internet/DNS/IPv6 leak
+  test, a physical Files receiver transfer, a long screen-lock/recovery test,
+  or a third-party VPN coexistence test.
+
+## Network switching and Proton VPN, October 24, 2026
+
+- Began with Wi-Fi disabled, mobile data enabled, private connection enabled
+  and both Internet VPNs disconnected. Always-on VPN was unset and lockdown
+  disabled; these settings were retained.
+- Enabled saved Wi-Fi and confirmed it became the validated physical default
+  network. Disabled data on the active subscription to check Wi-Fi alone, then
+  restored mobile data and disabled Wi-Fi. Core management stayed connected;
+  private connection checks completed without displayed errors on both paths.
+- Connected the existing Proton VPN 5.20.98.0 free profile. Proton showed
+  Protected, its WireGuard foreground service was active, and Android exposed
+  a connected VPN network. Repeated Core's private connection check over mobile
+  data, then Wi-Fi alone, then mobile data again while Proton remained active.
+  Core remained connected and the checks completed without displayed errors.
+- Core's native runtime retained the same PID throughout these handovers and
+  Proton connect/disconnect. No manual private-connection restart was used.
+- Disconnected Proton and verified the private connection again. Restored
+  mobile data enabled, Wi-Fi disabled, Internet VPNs disconnected and Core's
+  private connection enabled. Core's screen was left visible.
+- VPN by Google was left unconfigured and was not enabled or used. The owner
+  explicitly excluded it from testing due to privacy concerns.
+- These are functional handover/coexistence checks for this device and Proton
+  profile. They do not establish packet-level leak behavior or compatibility
+  with every provider, protocol, split-tunnel or lockdown setting.
+
+## First physical Android install, October 23, 2026
+
+- Pixel 10: Core 1.0.0+8 updated the existing application in place. Its enrollment
+  survived, and the app reconnected to the owner's existing core node.
+- VPN 1.0.0+1 installed separately with the same verified publisher certificate.
+  Android granted the signature-protected broker permission, and the companion
+  bound to CoreBrokerService. Both app processes launched without fatal errors.
+- An ADB shell caller could not start CoreBrokerService: Android rejected it
+  for lacking CORE_BROKER. This checks the service entry permission, not every
+  per-message caller validation case.
+- During the owner's phone testing, the separate VPN service became active and
+  showed VPN connected. The owner confirmed enabling VPN access in Core and
+  successfully connecting with the new VPN app. Core's management screen
+  subsequently remained connected with VPN capability access enabled.
+  The owner also reported that Internet access and DNS appeared to work through
+  the new VPN. Routing/leak checks were not independently measured in these
+  install checks.
+- The owner reported that all five manual reconnect checks passed: three
+  disconnect/connect cycles, Wi-Fi/mobile transitions, a 30-second complete
+  network outage, dismissing/reopening both app screens, and five minutes with
+  the screen locked. Recovery timings and packet-level routing/leak measurements
+  were not captured; these are owner-observed functional results.
+- The ARM64 pairing library was recovered from the phone's installed, signed
+  1.0.0+7 APK. Native pairing source is unchanged from 98fcfce; required exports
+  and the packaged library's SHA-256 were checked. This is test-artifact reuse,
+  not a new Android native source build.
+- The packaging command now supports `-TargetPlatform android-arm64` and checks
+  that every selected pairing library is present in the finished Core APK.
+  Default packaging still requires all three supported Android architectures.
+- End-to-end VPN routing, private streams, external-VPN coexistence, and Android
+  background/recovery scenarios are not implied by these launch checks.
+- At that install, Core's screen still included its inherited VPN controls. That panel
+  reports only the legacy Core-hosted tunnel; the separate VPN app's state is
+  authoritative for the new capability. The current code collapses that panel
+  under Previous VPN connection.
+
+Repeatable commands:
+
+- tool/check-workspace.ps1: formatting, analysis, application import boundaries,
+  Core regression tests, app widget tests, and broker tests.
+  Set EASYPRIVACY_CORE_RUNTIME to the absolute built helper path to also run
+  the native-process/Dart SDK stream integration test (otherwise it is skipped).
+- In core/: go test -race ./... and go vet ./... after building the existing Rust
+  pairing library with core/scripts/build-pairing.sh.
+- In native/core-runtime/: go test -race ./...
+- tool/build-android.ps1 -App core|vpn|files (Core requires pairing/runtime libraries).
+  Add -TargetPlatform android-arm64 for the current phone test artifacts.
+- tool/build-windows.ps1 -App core|vpn|files (Core/VPN require native artifacts).
+
+The automated suites do not modify a real owner deployment. The separately
+authorized phone installs above preserve app data and are recorded independently.
+Full Android caller-denial, real VPN routing, and foreground/background behavior
+still require their device integration checks.
+
+See app-reorganization-plan.md for the full staged design,
+../protocols/broker/v1/README.md for the implemented control API, and
+../protocols/core/v2/README.md for private-peer semantics and rollback.

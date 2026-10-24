@@ -22,19 +22,21 @@ type Backend interface {
 	Down() error
 }
 type Manager struct {
-	mu         sync.Mutex
-	config     Config
-	path       string
-	peers      map[string]Peer
-	backend    Backend
-	authorized func() (map[string]bool, error)
+	mu            sync.Mutex
+	config        Config
+	path          string
+	peers         map[string]Peer
+	backend       Backend
+	authorized    func() (map[string]bool, error)
+	receivers     map[string]receiverLease
+	privatePolicy [32]byte
 }
 
 func NewManager(c Config, dir string, b Backend, auth func() (map[string]bool, error)) (*Manager, error) {
 	if e := c.Validate(); e != nil {
 		return nil, e
 	}
-	m := &Manager{config: c, path: filepath.Join(dir, "peers.json"), peers: map[string]Peer{}, backend: b, authorized: auth}
+	m := &Manager{config: c, path: filepath.Join(dir, "peers.json"), peers: map[string]Peer{}, backend: b, authorized: auth, receivers: map[string]receiverLease{}}
 	var peers []Peer
 	if e := ReadPrivate(m.path, &peers); e != nil && !errors.Is(e, os.ErrNotExist) {
 		return nil, e
@@ -46,7 +48,7 @@ func NewManager(c Config, dir string, b Backend, auth func() (map[string]bool, e
 	keys := map[string]bool{}
 	services := 0
 	for _, p := range peers {
-		if !ValidID(p.DeviceID) || p.Host < 2 || p.Host > 254 || hosts[p.Host] || keys[p.PublicKey] {
+		if (p.Purpose != "" && p.Purpose != PrivatePurpose) || (p.Purpose == PrivatePurpose && (p.Service || p.ExitID != "" || p.Name != "" || p.Management != "")) || !ValidID(p.DeviceID) || p.Host < 2 || p.Host > 254 || hosts[p.Host] || keys[p.PublicKey] {
 			return nil, errors.New("invalid persisted VPN peer")
 		}
 		if _, e := Key(p.PublicKey); e != nil {
@@ -64,16 +66,36 @@ func NewManager(c Config, dir string, b Backend, auth func() (map[string]bool, e
 		if services > 1 || (p.ExitID != "" && p.ExitID != "vps" && p.ExitID != "home") || (p.Service && (p.ExitID != "" || !validServiceName(p.Name))) {
 			return nil, errors.New("invalid persisted service or exit")
 		}
-		if _, exists := m.peers[p.DeviceID]; exists {
+		if _, exists := m.peers[peerSlot(p)]; exists {
 			return nil, errors.New("duplicate VPN device")
 		}
-		m.peers[p.DeviceID] = p
+		m.peers[peerSlot(p)] = p
 		hosts[p.Host] = true
 		keys[p.PublicKey] = true
 	}
 	return m, nil
 }
 func (m *Manager) save() error {
+	for _, p := range m.peers {
+		if p.Purpose == PrivatePurpose {
+			backup := filepath.Join(filepath.Dir(m.path), "peers.pre-private.json")
+			if _, err := os.Stat(backup); errors.Is(err, os.ErrNotExist) {
+				var previous []Peer
+				if err := ReadPrivate(m.path, &previous); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return err
+				}
+				if previous == nil {
+					previous = []Peer{}
+				}
+				if err := SavePrivate(backup, previous); err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+			break
+		}
+	}
 	ps := make([]Peer, 0, len(m.peers))
 	for _, p := range m.peers {
 		ps = append(ps, p)
@@ -92,7 +114,7 @@ func (m *Manager) reconcile() error {
 	}
 	changed := false
 	for id, p := range m.peers {
-		if !authorized[id] {
+		if !authorized[p.DeviceID] {
 			if e := m.backend.RemovePeer(p.PublicKey); e != nil {
 				return e
 			}
@@ -101,7 +123,17 @@ func (m *Manager) reconcile() error {
 		}
 	}
 	if changed {
-		return m.save()
+		if err := m.save(); err != nil {
+			return err
+		}
+	}
+	if err := m.syncPrivateAccess(); err != nil {
+		for _, p := range m.peers {
+			if p.Purpose == PrivatePurpose {
+				_ = m.backend.RemovePeer(p.PublicKey)
+			}
+		}
+		return err
 	}
 	return nil
 }
@@ -109,6 +141,9 @@ func (m *Manager) Register(id, key string) (Profile, error) {
 	return m.RegisterExit(id, key, "vps")
 }
 func (m *Manager) RegisterExit(id, key, exit string) (Profile, error) {
+	if m.config.PrivateOnly {
+		return Profile{}, errors.New("Internet exits are disabled; run sudo easyprivacy-node vpn-setup to enable one")
+	}
 	if exit == "" {
 		exit = "vps"
 	}
@@ -129,6 +164,9 @@ func validServiceName(name string) bool {
 	return true
 }
 func (m *Manager) RegisterService(id, key, name string, addresses ...string) (ServiceProfile, error) {
+	if m.config.PrivateOnly {
+		return ServiceProfile{}, errors.New("Home exits require Internet VPN setup")
+	}
 	if !validServiceName(name) {
 		return ServiceProfile{}, errors.New("enter a service name from 1 to 80 characters")
 	}
@@ -148,6 +186,7 @@ func (m *Manager) register(request Peer) (Profile, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	id, key := request.DeviceID, request.PublicKey
+	slot := peerSlot(request)
 	var empty Profile
 	if !ValidID(id) {
 		return empty, errors.New("invalid device identity")
@@ -162,7 +201,7 @@ func (m *Manager) register(request Peer) (Profile, error) {
 	if e = m.reconcile(); e != nil {
 		return empty, e
 	}
-	old, exists := m.peers[id]
+	old, exists := m.peers[slot]
 	if exists && old.Service != request.Service {
 		return empty, errors.New("disconnect this identity before changing its VPN role")
 	}
@@ -171,10 +210,10 @@ func (m *Manager) register(request Peer) (Profile, error) {
 		if p.Service {
 			foundService = true
 		}
-		if request.Service && p.Service && other != id {
+		if request.Service && p.Service && other != slot {
 			return empty, errors.New("a home service node is already registered; revoke it before replacing it")
 		}
-		if other != id && p.PublicKey == key {
+		if other != slot && p.PublicKey == key {
 			return empty, errors.New("VPN key belongs to another device")
 		}
 	}
@@ -203,23 +242,34 @@ func (m *Manager) register(request Peer) (Profile, error) {
 			return empty, e
 		}
 	}
-	m.peers[id] = p
+	m.peers[slot] = p
 	if e = m.save(); e != nil {
 		if exists {
-			m.peers[id] = old
+			m.peers[slot] = old
 			_ = m.backend.SetPeer(m.config, old)
 		} else {
-			delete(m.peers, id)
+			delete(m.peers, slot)
 		}
 		return empty, e
 	}
 	if e = m.backend.SetPeer(m.config, p); e != nil {
 		_ = m.backend.RemovePeer(key)
 		if exists {
-			m.peers[id] = old
+			m.peers[slot] = old
 			_ = m.backend.SetPeer(m.config, old)
 		} else {
-			delete(m.peers, id)
+			delete(m.peers, slot)
+		}
+		_ = m.save()
+		return empty, e
+	}
+	if e = m.syncPrivateAccess(); e != nil {
+		_ = m.backend.RemovePeer(key)
+		if exists {
+			m.peers[slot] = old
+			_ = m.backend.SetPeer(m.config, old)
+		} else {
+			delete(m.peers, slot)
 		}
 		_ = m.save()
 		return empty, e
@@ -264,14 +314,16 @@ func (m *Manager) Status(id string) (Status, error) {
 	}
 	return m.backend.PeerStatus(p.PublicKey)
 }
-func (m *Manager) Info() (Exit, error) { return Exit{ID: "vps", Name: m.config.Name, Ready: true}, nil }
+func (m *Manager) Info() (Exit, error) {
+	return Exit{ID: "vps", Name: m.config.Name, Ready: !m.config.PrivateOnly, Message: privateOnlyMessage(m.config)}, nil
+}
 func (m *Manager) Exits() ([]Exit, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if e := m.reconcile(); e != nil {
 		return nil, e
 	}
-	result := []Exit{{ID: "vps", Name: m.config.Name, Ready: true}}
+	result := []Exit{{ID: "vps", Name: m.config.Name, Ready: !m.config.PrivateOnly, Message: privateOnlyMessage(m.config)}}
 	for _, p := range m.peers {
 		if !p.Service {
 			continue
@@ -288,6 +340,8 @@ func (m *Manager) Exits() ([]Exit, error) {
 }
 func (m *Manager) Handler() http.Handler {
 	mux := http.NewServeMux()
+	m.registerPrivateEndpoints(mux)
+	m.registerPrivateAccessEndpoints(mux)
 	reply := func(w http.ResponseWriter, v any, e error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -308,7 +362,7 @@ func (m *Manager) Handler() http.Handler {
 			d.DisallowUnknownFields()
 			var p Peer
 			var extra any
-			if d.Decode(&p) != nil || d.Decode(&extra) != io.EOF || p.Host != 0 || p.Service || (!service && (p.Name != "" || p.Management != "")) || (service && p.ExitID != "") {
+			if d.Decode(&p) != nil || p.Purpose != "" || d.Decode(&extra) != io.EOF || p.Host != 0 || p.Service || (!service && (p.Name != "" || p.Management != "")) || (service && p.ExitID != "") {
 				reply(w, nil, errors.New("invalid peer request"))
 				return
 			}
