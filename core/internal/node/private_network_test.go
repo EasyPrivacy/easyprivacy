@@ -31,6 +31,10 @@ func (v *privateNetworkFixture) RegisterReceiver(id string) (vpn.PrivateTarget, 
 	return vpn.PrivateTarget{ID: "receiver.fixture", DeviceID: id, Address: "10.87.0.3", Port: vpn.FilesReceiverPort}, nil
 }
 func (v *privateNetworkFixture) RemoveReceiver(id string) error { v.receiverDevice = id; return nil }
+func (v *privateNetworkFixture) RegisterDrive(id, name string) (vpn.PrivateTarget, error) {
+	v.receiverDevice = id
+	return vpn.PrivateTarget{Kind: "drive", Name: name, ID: "receiver.fixture", DeviceID: id, Address: "10.87.0.3", Port: vpn.FilesReceiverPort}, nil
+}
 
 func TestPrivateNetworkAPIBindsParentAndRevokesAllPurposes(t *testing.T) {
 	s, ts, client := runningServer(t)
@@ -77,6 +81,11 @@ func TestPrivateNetworkAPIBindsParentAndRevokesAllPurposes(t *testing.T) {
 	status, _ = request(t, client, ts.URL, "POST", "/api/v2/network/private/receiver", jsonBody(map[string]string{"capability": "files"}), token)
 	if status != 200 || backend.receiverDevice != device.ID {
 		t.Fatal("receiver is not scoped to enrolled parent")
+	}
+	backend.receiverDevice = ""
+	status, _ = request(t, client, ts.URL, "POST", "/api/v2/network/private/receiver", jsonBody(map[string]string{"capability": "drive", "name": "Cloud storage"}), token)
+	if status != 200 || backend.receiverDevice != device.ID {
+		t.Fatal("Drive registration was not bound to the authenticated parent")
 	}
 	status, _ = request(t, client, ts.URL, "POST", "/api/v2/network/private/disconnect", "", token)
 	if status != 200 || backend.privateRemoved != device.ID || backend.removed != "" {

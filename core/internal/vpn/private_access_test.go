@@ -7,6 +7,59 @@ import (
 	"time"
 )
 
+func TestDriveLeaseHasDistinctRoleAndUsesExistingPrivatePort(t *testing.T) {
+	c := fixtureConfig(t)
+	a, b := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	allowed := map[string]bool{a: true, b: true}
+	backend := &fakeBackend{peers: map[string]Peer{}}
+	m, err := NewManager(c, t.TempDir(), backend, func() (map[string]bool, error) { return allowed, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.RegisterPrivate(a, publicKey(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.RegisterPrivate(b, publicKey(t)); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := m.RegisterDrive(b, "Storage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.Kind != "drive" || lease.Name != "Storage" || lease.Port != FilesReceiverPort {
+		t.Fatal("invalid Drive target", lease)
+	}
+	if _, err = m.RegisterReceiver(b); err == nil {
+		t.Fatal("Drive identity could silently change receiver roles")
+	}
+	targets, err := m.PrivateTargets(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, target := range targets {
+		if target.ID == lease.ID && target.Kind == "drive" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Drive was not discoverable")
+	}
+	renewed, err := m.RegisterDrive(b, "Updated storage")
+	if err != nil || renewed.ID != lease.ID || renewed.Name != "Updated storage" {
+		t.Fatal("Drive renewal lost identity")
+	}
+	delete(allowed, b)
+	targets, err = m.PrivateTargets(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range targets {
+		if target.ID == lease.ID {
+			t.Fatal("revoked Drive stayed discoverable")
+		}
+	}
+}
 func TestPrivateReceiverLeasesRestrictPortsPeersAndLifetime(t *testing.T) {
 	c := fixtureConfig(t)
 	a, b := strings.Repeat("a", 64), strings.Repeat("b", 64)

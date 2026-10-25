@@ -15,6 +15,8 @@ import (
 const receiverLifetime = 120 * time.Second
 
 type receiverLease struct {
+	Kind     string
+	Name     string
 	ID       string
 	DeviceID string
 	Expires  time.Time
@@ -99,7 +101,7 @@ func (m *Manager) privatePeerLocked(id string) (Peer, error) {
 
 func (m *Manager) receiverTarget(lease receiverLease) PrivateTarget {
 	peer := m.peers[peerSlot(Peer{DeviceID: lease.DeviceID, Purpose: PrivatePurpose})]
-	return PrivateTarget{ID: "receiver." + lease.ID, Name: "Files receiver", DeviceID: lease.DeviceID,
+	return PrivateTarget{ID: "receiver." + lease.ID, Kind: lease.Kind, Name: lease.Name, DeviceID: lease.DeviceID,
 		Address: strings.TrimSuffix(m.config.Address(peer.Host), "/32"), Port: FilesReceiverPort, ExpiresAt: &lease.Expires}
 }
 
@@ -120,6 +122,20 @@ func (m *Manager) PrivateTargets(id string) ([]PrivateTarget, error) {
 }
 
 func (m *Manager) RegisterReceiver(id string) (PrivateTarget, error) {
+	return m.registerReceiver(id, "files", "Files receiver")
+}
+
+type DriveControl interface {
+	RegisterDrive(string, string) (PrivateTarget, error)
+}
+
+func (m *Manager) RegisterDrive(id, name string) (PrivateTarget, error) {
+	if strings.TrimSpace(name) == "" || len(name) > 80 || strings.ContainsAny(name, "\r\n\x00") {
+		return PrivateTarget{}, errors.New("invalid Drive name")
+	}
+	return m.registerReceiver(id, "drive", name)
+}
+func (m *Manager) registerReceiver(id, kind, name string) (PrivateTarget, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.privatePeerLocked(id); err != nil {
@@ -130,6 +146,10 @@ func (m *Manager) RegisterReceiver(id string) (PrivateTarget, error) {
 	}
 	for key, lease := range m.receivers {
 		if lease.DeviceID == id {
+			if lease.Kind != kind {
+				return PrivateTarget{}, errors.New("this device already hosts another receiver role")
+			}
+			lease.Name = name
 			lease.Expires = time.Now().UTC().Add(receiverLifetime)
 			m.receivers[key] = lease
 			return m.receiverTarget(lease), nil
@@ -142,7 +162,7 @@ func (m *Manager) RegisterReceiver(id string) (PrivateTarget, error) {
 	if _, err := rand.Read(token); err != nil {
 		return PrivateTarget{}, err
 	}
-	lease := receiverLease{ID: hex.EncodeToString(token), DeviceID: id, Expires: time.Now().UTC().Add(receiverLifetime)}
+	lease := receiverLease{ID: hex.EncodeToString(token), DeviceID: id, Kind: kind, Name: name, Expires: time.Now().UTC().Add(receiverLifetime)}
 	m.receivers[lease.ID] = lease
 	if err := m.syncPrivateAccess(); err != nil {
 		delete(m.receivers, lease.ID)
@@ -181,6 +201,14 @@ func (c Client) RegisterReceiver(id string) (PrivateTarget, error) {
 	err := c.request("POST", "/private-receivers/"+id, nil, &result)
 	return result, err
 }
+func (c Client) RegisterDrive(id, name string) (PrivateTarget, error) {
+	var result PrivateTarget
+	if !ValidID(id) {
+		return result, errors.New("invalid device")
+	}
+	err := c.request("POST", "/private-drives/"+id, map[string]string{"name": name}, &result)
+	return result, err
+}
 func (c Client) RemoveReceiver(id string) error {
 	if !ValidID(id) {
 		return errors.New("invalid device")
@@ -198,6 +226,21 @@ func (m *Manager) registerPrivateAccessEndpoints(mux *http.ServeMux) {
 		}
 		_ = json.NewEncoder(w).Encode(value)
 	}
+	mux.HandleFunc("POST /private-drives/{id}", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 512)
+		defer r.Body.Close()
+		var input struct {
+			Name string `json:"name"`
+		}
+		d := json.NewDecoder(r.Body)
+		d.DisallowUnknownFields()
+		if d.Decode(&input) != nil {
+			reply(w, nil, errors.New("invalid Drive registration"))
+			return
+		}
+		value, err := m.RegisterDrive(r.PathValue("id"), input.Name)
+		reply(w, value, err)
+	})
 	mux.HandleFunc("GET /private-targets/{id}", func(w http.ResponseWriter, r *http.Request) {
 		v, e := m.PrivateTargets(r.PathValue("id"))
 		reply(w, v, e)

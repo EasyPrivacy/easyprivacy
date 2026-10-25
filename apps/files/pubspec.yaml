@@ -1,6 +1,6 @@
 name: easyprivacy_files
 publish_to: none
-version: 1.0.0+6
+version: 1.0.0+7
 environment:
   sdk: '>=3.12.0 <4.0.0'
 resolution: workspace

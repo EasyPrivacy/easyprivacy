@@ -1,0 +1,33 @@
+[Unit]
+Description=EasyPrivacy private Drive storage node
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/easyprivacy-drive/drive.json
+
+[Service]
+Type=exec
+User=easyprivacy-drive
+Group=easyprivacy-drive
+ExecStart=/usr/bin/easyprivacy-node drive-serve
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/easyprivacy-drive
+# Setup adds only the explicitly configured data directories through a drop-in.
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+# Userspace WireGuard observes Linux route changes through an unprivileged
+# NETLINK_ROUTE socket. No network-administration capability is granted.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

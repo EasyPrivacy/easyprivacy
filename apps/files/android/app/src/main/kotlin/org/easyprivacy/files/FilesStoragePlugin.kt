@@ -82,7 +82,11 @@ class FilesStoragePlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activity
                     val syncRelative = file.path.removePrefix(syncRoot.path + File.separator)
                     val syncFile = file.path.startsWith(syncRoot.path + File.separator) &&
                         Regex("^[0-9a-f]{64}/folders/ep-[0-9a-f]{32}/.+").matches(syncRelative)
-                    require(((file.path.startsWith(root.path + File.separator) && file.name == "payload.received") || syncFile) && file.isFile)
+                    val driveRoot = File(context.filesDir, "easyprivacy-drive").canonicalFile
+                    val driveRelative = file.path.removePrefix(driveRoot.path + File.separator)
+                    val driveFile = file.path.startsWith(driveRoot.path + File.separator) &&
+                        Regex("^[0-9a-f]{32}/payload$").matches(driveRelative)
+                    require(((file.path.startsWith(root.path + File.separator) && file.name == "payload.received") || syncFile || driveFile) && file.isFile)
                     require(name.isNotEmpty() && name.length <= 180 && !name.contains('/') && !name.contains('\\'))
                     pendingSave = result
                     pendingFile = file

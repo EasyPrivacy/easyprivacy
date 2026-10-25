@@ -5,6 +5,8 @@ import 'providers/device_transfer_provider.dart';
 import 'screens/send_screen.dart';
 import 'providers/folder_sync_provider.dart';
 import 'screens/sync_screen.dart';
+import 'screens/drive_screen.dart';
+import 'drive/drive_client.dart';
 import 'background/files_background.dart';
 
 class EasyPrivacyFilesApp extends StatefulWidget {
@@ -13,10 +15,12 @@ class EasyPrivacyFilesApp extends StatefulWidget {
     this.connection,
     this.transfers,
     this.sync,
+    this.drive,
   });
   final BrokerCoreConnection? connection;
   final DeviceTransferProvider? transfers;
   final FolderSyncProvider? sync;
+  final DriveClient? drive;
   @override
   State<EasyPrivacyFilesApp> createState() => _EasyPrivacyFilesAppState();
 }
@@ -92,51 +96,12 @@ class _EasyPrivacyFilesAppState extends State<EasyPrivacyFilesApp> {
                   children: [
                     SendScreen(provider: transfers),
                     SyncScreen(provider: sync, background: background),
-                    const _Mode(
-                      icon: Icons.cloud_outlined,
-                      title: 'Your private Drive',
-                      description:
-                          'Store files on your own server and access them even when your other devices are offline.',
-                    ),
+                    DriveScreen(client: widget.drive),
                   ],
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _Mode extends StatelessWidget {
-  const _Mode({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-  final IconData icon;
-  final String title, description;
-  @override
-  Widget build(BuildContext context) => Center(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 20),
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 12),
-            Text(description, textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            const Text(
-              'This capability is not available in this development build.',
-              textAlign: TextAlign.center,
-            ),
-          ],
         ),
       ),
     ),

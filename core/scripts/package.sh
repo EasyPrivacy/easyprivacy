@@ -22,6 +22,7 @@ install -m 0755 "$binary" "$staging/usr/bin/easyprivacy-node"
 install -m 0644 "$core_dir/packaging/easyprivacy-node.service" "$staging/usr/lib/systemd/system/"
 install -m 0644 "$core_dir/packaging/easyprivacy-vpn.service" "$staging/usr/lib/systemd/system/"
 install -m 0644 "$core_dir/packaging/easyprivacy-service.service" "$staging/usr/lib/systemd/system/"
+install -m 0644 "$core_dir/packaging/easyprivacy-drive.service" "$staging/usr/lib/systemd/system/"
 mkdir -p "$staging/usr/lib/tmpfiles.d"
 install -m 0644 "$core_dir/packaging/easyprivacy-vpn.tmpfiles" "$staging/usr/lib/tmpfiles.d/easyprivacy-vpn.conf"
 install -m 0644 "$core_dir/README.md" "$staging/usr/share/doc/easyprivacy-node/README"
@@ -37,7 +38,7 @@ Architecture: $arch
 Maintainer: EasyPrivacy contributors <maintainers@easyprivacy.invalid>
 Section: net
 Priority: optional
-Depends: systemd, init-system-helpers (>= 1.52), passwd, libc6 (>= 2.39), libgcc-s1, wireguard-tools, iproute2, iptables
+Depends: systemd, init-system-helpers (>= 1.52), passwd, util-linux, libc6 (>= 2.39), libgcc-s1, wireguard-tools, iproute2, iptables
 Description: EasyPrivacy core and home service node
  Terminal setup, encrypted connections and owner authentication.
  Targets Ubuntu 24.04 LTS with VPS and outbound home WireGuard VPN exits.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easyprivacy_core_sdk/easyprivacy_core_sdk.dart';
 import 'package:easyprivacy_files/app.dart';
+import 'package:easyprivacy_files/drive/drive_client.dart';
 import 'package:easyprivacy_files/providers/device_transfer_provider.dart';
 import 'package:easyprivacy_files/screens/send_screen.dart';
 import 'package:easyprivacy_files/screens/sync_screen.dart';
@@ -16,6 +17,11 @@ class TestBroker implements BrokerTransport {
   ]) async => {'protocol': 1, 'has_session': false, 'message': 'Pair in Core.'};
   @override
   void close() {}
+}
+
+class EmptyDrive extends DriveClient {
+  @override
+  Future<List<DriveNode>> nodes() async => [];
 }
 
 void main() {
@@ -133,8 +139,15 @@ void main() {
       final sync = FolderSyncProvider(transfers: transfers, autoStart: false);
       addTearDown(sync.dispose);
       addTearDown(transfers.dispose);
+      final drive = EmptyDrive();
+      addTearDown(drive.close);
       await tester.pumpWidget(
-        EasyPrivacyFilesApp(connection: core, transfers: transfers, sync: sync),
+        EasyPrivacyFilesApp(
+          connection: core,
+          transfers: transfers,
+          sync: sync,
+          drive: drive,
+        ),
       );
       expect(find.text('Send'), findsOneWidget);
       expect(find.text('Sync'), findsOneWidget);
@@ -143,10 +156,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Your private Drive'), findsOneWidget);
       expect(
-        find.text(
-          'This capability is not available in this development build.',
-        ),
-        findsWidgets,
+        find.textContaining('No Drive node is available.'),
+        findsOneWidget,
       );
       await tester.pumpWidget(const SizedBox());
     },

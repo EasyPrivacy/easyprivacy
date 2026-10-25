@@ -1,4 +1,7 @@
-param([ValidateSet('core','vpn','files')][string]$App = 'core')
+param(
+    [ValidateSet('core','vpn','files')][string]$App = 'core',
+    [ValidatePattern('^[a-z0-9-]*$')][string]$PackageTag = ''
+)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $appRoot = Join-Path $repoRoot "apps/$App"
@@ -69,11 +72,12 @@ try {
         flutter build windows --release --no-pub
         if ($LASTEXITCODE -ne 0) { throw 'Windows build failed.' }
     } finally { Pop-Location }
-    $output = Join-Path $appRoot 'build/windows-package'
+    $suffix = if ($PackageTag) { '-'+$PackageTag } else { '' }
+    $output = Join-Path $appRoot ('build/windows-package'+$suffix)
     New-Item -ItemType Directory -Force -Path $output | Out-Null
     Copy-Item -Path (Join-Path $stagedApp 'build/windows/x64/runner/Release/*') -Destination $output -Recurse -Force
     $version = (Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'VERSION')).Trim()
-    $archive = Join-Path $appRoot "build/easyprivacy-$App-windows-$version-x64.zip"
+    $archive = Join-Path $appRoot "build/easyprivacy-$App-windows-$version-x64$suffix.zip"
     # Flutter bundles have identically named data/app.so and asset files.
     # Include a distinct top-level folder so extracting several app ZIPs into
     # one location cannot overwrite another application's runtime payload.

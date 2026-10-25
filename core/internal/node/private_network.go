@@ -112,12 +112,13 @@ func (s *Server) privateReceiver(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Capability string `json:"capability"`
+		Name       string `json:"name,omitempty"`
 	}
 	if !readRequest(w, r, &input) {
 		return
 	}
-	if input.Capability != "files" {
-		writeError(w, 400, "Only the Files receiver is supported.")
+	if input.Capability != "files" && input.Capability != "drive" {
+		writeError(w, 400, "Only Files and Drive receivers are supported.")
 		return
 	}
 	s.mu.Lock()
@@ -131,7 +132,18 @@ func (s *Server) privateReceiver(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "Update the node network helper for private receivers.")
 		return
 	}
-	target, err := control.RegisterReceiver(current.DeviceID)
+	var target vpn.PrivateTarget
+	var err error
+	if input.Capability == "drive" {
+		if drive, ok := s.vpn.(vpn.DriveControl); ok {
+			target, err = drive.RegisterDrive(current.DeviceID, input.Name)
+		} else {
+			writeError(w, 503, "Update the network helper for Drive nodes.")
+			return
+		}
+	} else {
+		target, err = control.RegisterReceiver(current.DeviceID)
+	}
 	if err != nil {
 		writeError(w, 503, err.Error())
 		return

@@ -43,3 +43,10 @@ Desktop location passed these diagnostics and displayed the connected Core after
 relaunch. The original instance's failure was not isolated. Combining the app
 bundles was a later troubleshooting attempt, so it does not explain the initial
 error.
+
+On October 25, 2026, the Desktop Core and Files folders were updated to the
+complete Core build 11 and Files build 7 bundles. The earlier worktree-hosted
+broker was replaced with the updated desktop-hosted broker, retaining enrollment
+and restoring the private connection. Installed-file hashes, packaged Files
+diagnostics and live Drive discovery/capacity/folder listing passed. The old
+bundles were removed after verification; Sync uses its existing app-data state.

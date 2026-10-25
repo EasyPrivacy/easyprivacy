@@ -2,11 +2,14 @@
 set -eu
 case "$1" in
     remove)
+        deb-systemd-helper mask easyprivacy-drive.service >/dev/null || true
         deb-systemd-helper mask easyprivacy-service.service >/dev/null || true
         deb-systemd-helper mask easyprivacy-vpn.service >/dev/null || true
         deb-systemd-helper mask easyprivacy-node.service >/dev/null || true
         ;;
     purge)
+        deb-systemd-helper purge easyprivacy-drive.service >/dev/null || true
+        deb-systemd-helper unmask easyprivacy-drive.service >/dev/null || true
         deb-systemd-helper purge easyprivacy-service.service >/dev/null || true
         deb-systemd-helper unmask easyprivacy-service.service >/dev/null || true
         deb-systemd-helper purge easyprivacy-vpn.service >/dev/null || true

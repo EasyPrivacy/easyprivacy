@@ -71,6 +71,7 @@ const PrivateProbePort = 41930
 const FilesReceiverPort = 41931
 
 type PrivateTarget struct {
+	Kind      string     `json:"kind,omitempty"`
 	ID        string     `json:"id"`
 	Name      string     `json:"name"`
 	DeviceID  string     `json:"device_id,omitempty"`

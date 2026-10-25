@@ -3,6 +3,7 @@ set -eu
 case "$1" in
     remove|deconfigure)
         if [ -d /run/systemd/system ]; then
+            deb-systemd-invoke stop easyprivacy-drive.service >/dev/null || true
             deb-systemd-invoke stop easyprivacy-service.service >/dev/null || true
             deb-systemd-invoke stop easyprivacy-vpn.service >/dev/null || true
             deb-systemd-invoke stop easyprivacy-node.service >/dev/null || true

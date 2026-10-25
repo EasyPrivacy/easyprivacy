@@ -55,6 +55,7 @@ notes for the scope and limitations of the completed MVP.
 - [Core management application](apps/core/README.md)
 - [Optional Internet VPN application](apps/vpn/README.md)
 - [Files application development status](apps/files/README.md)
+- [Private Drive storage-node setup and candidate status](docs/files-drive.md)
 - [App reorganization implementation status](docs/app-reorganization-progress.md)
 - [Private-network development update and rollback](docs/private-network-upgrade.md)
 - [Device pairing and authorization](docs/device-pairing.md)

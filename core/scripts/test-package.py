@@ -129,6 +129,32 @@ def main():
         runtime=state_dir/'runtime'
         inside('systemd-analyze','verify','/usr/lib/systemd/system/easyprivacy-vpn.service')
         inside('systemd-analyze','verify','/usr/lib/systemd/system/easyprivacy-service.service')
+        inside('systemd-analyze','verify','/usr/lib/systemd/system/easyprivacy-drive.service')
+        drive_account=inside('getent','passwd','easyprivacy-drive').strip().split(':')
+        drive_uid,drive_gid=int(drive_account[2]),int(drive_account[3])
+        assert drive_uid>0 and drive_uid!=uid and drive_gid>0
+        assert drive_account[5]=='/var/lib/easyprivacy-drive' and drive_account[6]=='/usr/sbin/nologin'
+        drive_dir=root/'var/lib/easyprivacy-drive'
+        assert drive_dir.stat().st_uid==drive_uid and stat.S_IMODE(drive_dir.stat().st_mode)==0o700
+        assert not os.path.lexists(root/'etc/systemd/system/multi-user.target.wants/easyprivacy-drive.service')
+        drive_data=root/'srv/package-drive';drive_data.mkdir(mode=0o700);os.chown(drive_data,drive_uid,drive_gid)
+        retained=drive_data/'existing.txt';retained.write_text('existing cloud data');retained.chmod(0o600);os.chown(retained,drive_uid,drive_gid)
+        drive_volume={'id':'1'*32,'name':'Package storage','path':'/srv/package-drive','quota':1024*1024}
+        run(['chroot',str(root),'setpriv','--reuid',str(drive_uid),'--regid',str(drive_gid),'--clear-groups',
+             '/usr/bin/easyprivacy-node','drive-prepare'],input=json.dumps(drive_volume),env=environment)
+        drive_marker=drive_data/'.easyprivacy-drive/volume-id'
+        assert drive_marker.read_text()=='1'*32 and drive_marker.stat().st_uid==drive_uid
+        assert retained.read_text()=='existing cloud data'
+        # Opaque synthetic operator state checks preservation, never starts a node.
+        drive_config=drive_dir/'drive.json';drive_config.write_text('{"fixture":"retained Drive enrollment"}\n')
+        drive_config.chmod(0o600);os.chown(drive_config,drive_uid,drive_gid)
+        drive_original=hashlib.sha256(drive_config.read_bytes()).hexdigest()
+        def assert_drive_preserved():
+            assert hashlib.sha256(drive_config.read_bytes()).hexdigest()==drive_original
+            assert stat.S_IMODE(drive_config.stat().st_mode)==0o600
+            assert drive_marker.read_text()=='1'*32
+            assert retained.read_text()=='existing cloud data'
+        print('PASS: dedicated unprivileged Drive account, confined storage preparation and systemd unit validation.',flush=True)
         assert not os.path.lexists(root/'etc/systemd/system/multi-user.target.wants/easyprivacy-service.service')
         vpn_dir=root/'var/lib/easyprivacy-vpn'
         assert stat.S_IMODE(vpn_dir.stat().st_mode)==0o700 and vpn_dir.stat().st_uid==0
@@ -257,25 +283,31 @@ esac
         control.write_text("\n".join(line + "+test1" if line.startswith("Version:") else line for line in lines) + "\n")
         run(["dpkg-deb", "--root-owner-group", "--build", str(staging), str(root / "tmp/upgrade.deb")])
         inside("dpkg", "--install", "/tmp/upgrade.deb")
+        assert_drive_preserved()
+        assert os.path.lexists(root/'etc/systemd/system/multi-user.target.wants/easyprivacy-drive.service')
         assert_vpn_preserved()
         assert os.path.lexists(root/'etc/systemd/system/multi-user.target.wants/easyprivacy-vpn.service')
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         assert hashlib.sha256(database.read_bytes()).hexdigest()==devices_original
         assert log.read_text().splitlines() == ["status", f"allow {port}/tcp"] * 2
         inside("dpkg", "--remove", "easyprivacy-node")
+        assert_drive_preserved()
         assert_vpn_preserved()
         assert not (root / "usr/bin/easyprivacy-node").exists()
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         inside("dpkg", "--install", "/tmp/easyprivacy.deb")
+        assert_drive_preserved()
         assert_vpn_preserved()
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         inside("dpkg", "--purge", "easyprivacy-node")
+        assert_drive_preserved()
         assert_vpn_preserved()
         assert hashlib.sha256(state_file.read_bytes()).hexdigest() == original
         assert hashlib.sha256(database.read_bytes()).hexdigest()==devices_original
         assert not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants/easyprivacy-node.service")
         print("PASS: upgrade, remove, reinstall and purge preserve the existing core identity and credentials.", flush=True)
         print("PASS: VPN traffic key, endpoint, subnet, legacy peers and private permissions survive package changes.", flush=True)
+        print('PASS: Drive settings, volume identity and existing cloud files survive upgrade, removal, reinstall and purge.',flush=True)
     print("Package test root removed; the host installation was not changed.", flush=True)
 
 

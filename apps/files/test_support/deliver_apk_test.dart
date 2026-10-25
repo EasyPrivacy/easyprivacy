@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'deliver an explicitly selected Files APK through approved Send',
+    'deliver an explicitly selected APK through approved Send',
     () async {
       final root = await Directory.systemTemp.createTemp('ep-apk-delivery-');
       final provider = DeviceTransferProvider(
@@ -39,6 +39,12 @@ void main() {
       final size = await file.length();
       final checksum = await sha256.bind(file.openRead()).first;
       await provider.initialize();
+      final connectionDeadline = DateTime.now().add(const Duration(minutes: 1));
+      while (!provider.connected &&
+          DateTime.now().isBefore(connectionDeadline)) {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        await provider.refresh();
+      }
       expect(provider.connected, isTrue, reason: provider.error);
       final recipient = Platform.environment['EP_FILES_RECIPIENT'];
       final deadline = DateTime.now().add(const Duration(minutes: 10));
@@ -67,6 +73,20 @@ void main() {
       print(
         'APK_OFFER: ${paths.basename(file.path)}, $size bytes, SHA256 $checksum, recipient ${peer!.name}.',
       );
+      TransferPhase? lastPhase;
+      var lastStep = -1;
+      provider.addListener(() {
+        if (provider.jobs.isEmpty) return;
+        final job = provider.jobs.first;
+        final step = job.size == 0 ? 10 : job.bytes * 10 ~/ job.size;
+        if (job.phase == lastPhase && step == lastStep) return;
+        lastPhase = job.phase;
+        lastStep = step;
+        // ignore: avoid_print
+        print(
+          'APK_PROGRESS: ${job.phase.name}, ${job.bytes}/${job.size} bytes.',
+        );
+      });
       await provider.send(
         TransferSource(
           name: paths.basename(file.path),

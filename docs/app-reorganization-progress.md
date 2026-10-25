@@ -1,11 +1,110 @@
 # App reorganization: implementation status
 
-Branch: codex/reorg-app. Updated October 24, 2026.
+Branch: codex/reorg-app. Updated October 25, 2026.
 The app split and private-service networking foundation are implemented.
 This is a development migration. Foreground Files Send works on Android and
 Windows; folder Sync now has real-engine and physical phone/laptop checks.
-Drive and extended device validation remain pending. The owner installed the node update; the physical checks below
-cover the private path, Internet VPN coexistence and actual file transfers.
+A first hosted Drive candidate is implemented and locally verified. The owner
+reports Android Drive works after reorg4; updated Windows apps can browse the
+same storage. Independent physical transfer/integrity checks remain pending.
+The owner installed the earlier node
+update; the physical checks below cover the private path, Internet VPN coexistence
+and actual file transfers.
+
+## Desktop Drive client update, October 25, 2026
+
+- Updated the owner's Desktop `easyprivacy/Core` and `easyprivacy/Files` folders
+  to the verified complete Core build 11 and Files build 7 Windows bundles.
+  Stopped the old worktree-hosted broker, launched the desktop-hosted replacement,
+  restored the private connection, and reopened Files with its existing Sync engine.
+- Verified every installed file against the staged release archive, the packaged
+  Files diagnostic (session and private connection active), and real read-only
+  Drive discovery, volume capacity and folder listing through the updated Core.
+  The existing 64 GiB storage location was available. No cloud files were changed.
+- Removed the prior app bundles and empty staging folder after verification, as
+  authorized. The desktop keeps separate Core, Files and VPN folders. Pairing,
+  grants, Sync paths and background preferences were retained in app data.
+
+## Drive upload authorization fix, October 25, 2026
+
+- The owner's first photo upload alternated between failed authorization and
+  private connection errors. Found that the storage service signed in separately
+  for every request and upload-publication check, and again for lease renewal.
+  The existing ten-sign-in-requests-per-IP/minute limit was exhausted after five
+  complete logins; a later renewal failure also closed the private transport.
+- Added one shared, synchronized, in-memory Core session for the Drive process,
+  bounded retry after session expiry and cooldown after failed sign-ins. The
+  sign-in limit stays unchanged. Each permission check still fetches authoritative
+  device records, including immediately before upload publication. No device
+  authorization or content is accepted from a stale local cache.
+- Real Core API regressions reproduce the old rate limit and cover concurrent
+  checks plus lease renewal, session expiry, requester/storage-node revocation,
+  signed wire uploads after repeated browsing, and rejection/cleanup when a
+  requester is revoked during an upload. Reorg4 packages carry this server fix;
+  existing Core build 11, Files build 7 and a reorg2 Core server remain compatible.
+- All four focused regressions passed, as did the node, Drive and CLI race-test
+  suites. Built amd64/arm64 reorg4 Debian packages and verified their checksums.
+- The owner reports Android Drive is now working after the Drive VM update.
+  Independent physical upload/download hashes, local-copy retention on cloud
+  deletion and extended operation remain further validation.
+
+## Drive connection diagnosis and service fix, October 25, 2026
+
+- Confirmed the phone runs Core build 11 and Files build 7. Starting Core's
+  stopped private connection resolved its empty Drive list. The full Internet
+  VPN was not required. The current empty-list wording should distinguish a
+  stopped client private transport from a missing storage advertisement.
+- The owner's separate Ubuntu VM enrolled as `kasonsummers.drive` with an empty,
+  available 64 GiB location. Its process was active and renewed its advertisement,
+  but repeatedly failed to start the private transport. This caused the next
+  client error, "The private service did not accept the connection."
+- Reproduced the failure in an unprivileged temporary Linux systemd process:
+  reorg2's socket-family allowlist rejected WireGuard's `NETLINK_ROUTE` socket.
+  Added `AF_NETLINK` while retaining the dedicated user, no capabilities and
+  the other sandbox settings. The owner applied the matching service override
+  and confirmed Drive opens on Android. No re-enrollment or storage reset was needed.
+- Added a real runtime regression using the declared service restrictions and
+  a negative control for the old allowlist. Transfer, verified receipt, ticket
+  replay denial and revocation pass under the corrected sandbox. Prepared node
+  reorg3 packages for future installations; the existing reorg2 Core and client
+  builds 11/7 remain protocol compatible. Physical cloud file operations remain
+  the next validation step.
+
+## Hosted Drive candidate, October 24, 2026
+
+- Committed the owner-verified live folder Sync work as `5fe6947` before beginning
+  Drive. Drive is a separate explicit-upload workflow: local originals remain,
+  browsing fetches metadata, and preview/download retrieves only selected files.
+- Added an independently enrolled Linux storage-node role with up to eight named
+  directories or mounted storage locations, each with a maximum byte capacity.
+  Setup preserves existing data. The unprivileged service uses Core's private
+  network and current paired-device authorization; no public storage port is needed.
+- Added operation-specific Core broker signatures, nonce/expiry checks, confined
+  filesystem access, capacity reservations, atomic verified uploads, metadata
+  pages, folder creation, moves and confirmed cloud deletion. Files offers quota
+  display, explicit uploads/downloads, and text/image previews on Windows/Android.
+- Local verification covers the production Dart client against the Go storage
+  server, independent originals/downloads, cancellation, quota concurrency,
+  corruption, traversal/links, replaced roots, revocation and signature replay.
+  All 36 Files tests passed with the bundled Sync engine and real Go Drive
+  fixture; two physical tests were skipped. Drive's Go race tests, Core broker
+  tests, workspace analysis and application boundaries passed. These checks do
+  not substitute for physical deployment.
+- Built Core 1.0.0+11 and Files 1.0.0+7 signed ARM64 APKs, separate Windows x64
+  candidate bundles, and node 1.0.1~reorg2 amd64/arm64 Debian packages. The amd64
+  package passed disposable Ubuntu 24.04.4 upgrade/remove/reinstall/purge checks
+  from reorg1, including the Drive account, unprivileged storage preparation,
+  service configuration, and preservation of existing identities and data.
+- APK Send retries stalled before a verified receipt. At the owner's request,
+  copied both APKs into the existing shared `Test` folder and verified their
+  SHA-256 values. The running Windows engine indexed both files (40,557,984
+  bytes, no pull errors). Android receipt/installation is not yet confirmed;
+  a selective receiver must select these new files for local download.
+- See [Drive setup and validation](files-drive.md). The existing Core node must
+  be upgraded, a storage location explicitly configured, and both client apps
+  updated before physical Drive testing. No node was remotely changed. RAID,
+  replica nodes, pooled storage, resumable uploads and release security review
+  remain future work.
 
 ## Live folder Sync candidate, October 24, 2026
 
@@ -62,9 +161,10 @@ cover the private path, Internet VPN coexistence and actual file transfers.
   apps have distinct identities and cannot import Core's private enrollment,
   pairing, owner session or vault implementation.
 - Core owns management and private connectivity; VPN owns its own Internet
-  traffic key and system tunnel. Files implements Send and two-device folder
-  Sync; Drive remains a clearly marked placeholder. See [Files Sync](files-sync.md)
-  for the bundled Syncthing engine, private bridge, approval and platform limits.
+  traffic key and system tunnel. Files implements Send, live folder Sync and a
+  hosted Drive candidate. See [Files Sync](files-sync.md) for the bundled engine,
+  private bridge, approval and platform limits, and [Drive](files-drive.md) for
+  storage-node setup and explicit cloud transfers.
 - Scoped broker control: Android verifies caller UID, publisher and package;
   desktop uses a protected per-user endpoint (a local-user trust boundary).
   Controls have a 16 KiB UTF-8 budget, 16 pending operations and 20-second
@@ -134,7 +234,7 @@ built and exercised as recorded below.
   extended screen-lock testing to ongoing personal use; it is not marked passed.
 - Full Android caller-denial coverage, device packet-level routing/leak checks,
   production signing/key rotation and migration release testing.
-- Extended folder-Sync validation, Drive and hosted service installation. Send needs
+- Extended folder-Sync validation and physical Drive service installation. Send needs
   further OS-kill/background, large-file, physical interruption and production
   release validation. Its new application encryption protocol also needs
   independent security review before a production release.

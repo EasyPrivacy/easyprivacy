@@ -136,6 +136,7 @@ class CoreBrokerRuntime {
             'closeReceiver',
             'filesDevices',
             'filesHandshake',
+            'driveAuthorize',
           };
     if (!allowedMethods.contains(method)) {
       throw const BrokerException(
@@ -227,7 +228,10 @@ class CoreBrokerRuntime {
           if (page.length > 16) 'next': page[15].id,
           'devices': page.take(16).map((d) {
             final receivers = targets.where(
-              (t) => t.deviceId == d.id && t.id.startsWith('receiver.'),
+              (t) =>
+                  t.deviceId == d.id &&
+                  t.id.startsWith('receiver.') &&
+                  t.kind == 'files',
             );
             return {
               'id': d.id,
@@ -235,6 +239,90 @@ class CoreBrokerRuntime {
               if (receivers.length == 1) 'service_id': receivers.single.id,
             };
           }).toList(),
+        };
+      case 'driveAuthorize':
+        if (arguments.length != 3 ||
+            arguments['node'] is! String ||
+            arguments['nonce'] is! String ||
+            arguments['command'] is! Map) {
+          throw const BrokerException(
+            'invalid_request',
+            'Invalid Drive authorization.',
+          );
+        }
+        final command = DriveCommand.fromJson(
+          Map<String, dynamic>.from(arguments['command'] as Map),
+        );
+        final nodes = await session.privateServices();
+        if (!nodes.any(
+          (t) =>
+              t.kind == 'drive' &&
+              t.deviceId == arguments['node'] &&
+              t.expiresAt != null &&
+              DateTime.now().isBefore(t.expiresAt!),
+        )) {
+          throw const BrokerException(
+            'not_authorized',
+            'That Drive node is unavailable.',
+          );
+        }
+        final devices = await session.devices();
+        if (!devices.any(
+          (d) =>
+              !d.revoked &&
+              d.id == arguments['node'] &&
+              d.id != session.deviceId,
+        )) {
+          throw const BrokerException(
+            'not_authorized',
+            'That Drive node is not paired.',
+          );
+        }
+        final profile = await store.read();
+        if (profile == null ||
+            profile.fingerprint != session.fingerprint ||
+            profile.deviceId != session.deviceId) {
+          throw const BrokerException(
+            'core_unavailable',
+            'Core enrollment changed.',
+          );
+        }
+        final identity = await DeviceIdentity.fromSeed(profile.deviceSeed!);
+        if (identity.id != session.deviceId) {
+          throw const BrokerException(
+            'core_unavailable',
+            'Core enrollment is inconsistent.',
+          );
+        }
+        final expires =
+            DateTime.now()
+                .add(const Duration(minutes: 2))
+                .millisecondsSinceEpoch ~/
+            1000;
+        final claim = driveRequestClaim(
+          core: session.fingerprint!,
+          device: identity.id,
+          node: arguments['node'] as String,
+          command: command,
+          nonce: arguments['nonce'] as String,
+          expires: expires,
+        );
+        if (await storage.read(key: 'easyprivacy.broker.allow_files') !=
+            'true') {
+          throw const BrokerException(
+            'grant_required',
+            'Files access changed in Core.',
+          );
+        }
+        return {
+          'core': session.fingerprint,
+          'device': identity.id,
+          'node': arguments['node'],
+          'nonce': arguments['nonce'],
+          'expires': expires,
+          'command': command.toJson(),
+          'identity': base64Encode(identity.publicKey),
+          'signature': base64Encode(await identity.sign(claim)),
         };
       case 'filesHandshake':
         if (arguments.length != 4 ||

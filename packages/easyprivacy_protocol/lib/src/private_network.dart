@@ -15,6 +15,9 @@ class PrivateServiceTarget {
     : id = value['id'] as String,
       name = value['name'] as String? ?? 'Private service',
       deviceId = value['device_id'] as String?,
+      kind =
+          value['kind'] as String? ??
+          (value['id'] == 'core.probe' ? 'probe' : 'files'),
       address = value['address'] as String,
       port = value['port'] as int,
       expiresAt = value['expires_at'] == null
@@ -25,11 +28,13 @@ class PrivateServiceTarget {
             !RegExp(r'^receiver\.[0-9a-f]{32}$').hasMatch(id)) ||
         (id != 'core.probe' && expiresAt == null) ||
         (id == 'core.probe' ? port != 41930 : port != 41931) ||
-        name.length > 160) {
+        name.length > 160 ||
+        !{'probe', 'files', 'drive'}.contains(kind) ||
+        (id == 'core.probe' ? kind != 'probe' : kind == 'probe')) {
       throw const FormatException('Invalid private service destination.');
     }
   }
-  final String id, name, address;
+  final String id, name, address, kind;
   final String? deviceId;
   final int port;
   final DateTime? expiresAt;
@@ -38,6 +43,7 @@ class PrivateServiceTarget {
     'name': name,
     'address': address,
     'port': port,
+    'kind': kind,
     if (deviceId != null) 'device_id': deviceId,
     if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
   };

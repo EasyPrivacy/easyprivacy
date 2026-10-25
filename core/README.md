@@ -7,6 +7,25 @@ V1.0.0 designates the first MVP, accepted by the owner on October 18, 2026.
 Existing installations can upgrade without repeating setup or enrollment; see
 the source repository's `docs/releases/1.0.0.md` for release and upgrade details.
 
+## Development Drive storage node
+
+The reorganization candidate adds an independent Drive role in node package
+1.0.1~reorg4 for Ubuntu 24.04 amd64/arm64. It can run beside Core or on a separate
+Linux machine using an outbound private connection. Run
+`sudo easyprivacy-node drive-setup` to pair it and choose a storage directory and
+capacity; installation alone does not start this role. Existing data is preserved.
+The service runs as the dedicated unprivileged `easyprivacy-drive` account.
+
+Use `drive-volume-add` for additional named locations and `drive-status`,
+`drive-start` or `drive-stop` to manage it. See the
+[Drive setup guide](../docs/files-drive.md) for package/client prerequisites,
+storage permissions, commands, limits and validation status. The owner verified
+Android access to a separate storage VM after the reorg3 service-sandbox fix;
+reorg4 also reuses the node's authenticated Core session to avoid exhausting
+the sign-in limit during browsing/uploads. Each operation still checks current
+device authorization. Physical file transfers remain to be tested. Redundancy
+is a later phase.
+
 ## Home VM service node
 
 Install the same node package on the home VM, then run

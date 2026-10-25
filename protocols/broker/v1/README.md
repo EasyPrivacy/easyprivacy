@@ -21,7 +21,7 @@ slot until it settles, even after a reply times out.
 | All | getSummary |
 | Core | privateStatus, privateStart, privateStop, privateProbe, refreshGrants |
 | VPN | vpnExits, vpnRegister(exit_id, public_key), vpnDisconnect, vpnStatus |
-| Files | privateStatus, listServices, openStream(service_id), registerReceiver, acceptReceiver(receiver_id), closeReceiver(receiver_id), filesDevices(after?), filesHandshake(peer, key, nonce, role) |
+| Files | privateStatus, listServices, openStream(service_id), registerReceiver, acceptReceiver(receiver_id), closeReceiver(receiver_id), filesDevices(after?), filesHandshake(peer, key, nonce, role), driveAuthorize(node, command, nonce) |
 
 VPN/Files operations require explicit grants in Core. Core starts/stops the
 private transport; Files cannot enable it or choose arbitrary IPs, ports or
@@ -44,6 +44,13 @@ key, remote credential or arbitrary-message signing operation is exposed. See
 [Files Send](../../../docs/files-send.md) for verification and encryption semantics.
 
 ## Stream protocol
+
+`driveAuthorize` issues only the [Drive request claim](../../drive/v1/README.md)
+for an active, paired Drive advertisement. It validates command paths, operation,
+length/hash and nonce, fixes the Core/device identity and expiry, and rechecks the
+Files grant. It never returns a general signer or a remote session credential.
+Drive advertisements have `kind=drive`; ordinary Send receivers have `kind=files`.
+Drive nodes are excluded from the Send receiver list.
 
 Payload bytes travel through pinned loopback TLS 1.3 sockets, outside JSON RPC
 and Android Binder. The native runtime holds the WireGuard userspace netstack;

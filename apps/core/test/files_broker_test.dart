@@ -35,6 +35,9 @@ class FilesSession extends CoreController {
   }
   final String id;
   List<PairedDevice> peers;
+  List<PrivateServiceTarget> targets = [];
+  @override
+  Future<List<PrivateServiceTarget>> privateServices() async => targets;
   Future<void> Function()? beforeDevices;
   @override
   bool get hasSession => true;
@@ -87,6 +90,131 @@ void main() {
     };
   });
   tearDown(() => runtime.shutdown());
+
+  Map<String, dynamic> driveRequest() {
+    session.targets = [
+      PrivateServiceTarget.fromJson({
+        'id': 'receiver.${'1' * 32}',
+        'kind': 'drive',
+        'name': 'Storage node',
+        'device_id': peer.id,
+        'address': '10.87.0.4',
+        'port': 41931,
+        'expires_at': DateTime.now()
+            .add(const Duration(minutes: 2))
+            .toUtc()
+            .toIso8601String(),
+      }),
+    ];
+    return {
+      'node': peer.id,
+      'nonce': 'c' * 64,
+      'command': const DriveCommand(
+        op: 'download',
+        volume: '11111111111111111111111111111111',
+        path: 'café/notes.md',
+      ).toJson(),
+    };
+  }
+
+  test(
+    'Drive delegation signs one exact command without exporting enrollment',
+    () async {
+      final request = driveRequest();
+      final result = await runtime.handle('files', 'driveAuthorize', request);
+      final command = DriveCommand.fromJson(
+        Map<String, dynamic>.from(result['command'] as Map),
+      );
+      final claim = driveRequestClaim(
+        core: pin,
+        device: identity.id,
+        node: peer.id,
+        command: command,
+        nonce: result['nonce'] as String,
+        expires: result['expires'] as int,
+      );
+      expect(
+        await Ed25519().verify(
+          utf8.encode(claim),
+          signature: Signature(
+            base64Decode(result['signature'] as String),
+            publicKey: SimplePublicKey(
+              identity.publicKey,
+              type: KeyPairType.ed25519,
+            ),
+          ),
+        ),
+        isTrue,
+      );
+      expect(command.path, 'café/notes.md');
+      expect(jsonEncode(result), isNot(contains(identity.encodedSeed)));
+    },
+  );
+  test(
+    'Drive requires Files grant, an active Drive advertisement and a paired node',
+    () async {
+      final request = driveRequest();
+      await expectLater(
+        runtime.handle('vpn', 'driveAuthorize', request),
+        throwsA(isA<BrokerException>()),
+      );
+      session.targets = [];
+      await expectLater(
+        runtime.handle('files', 'driveAuthorize', request),
+        throwsA(isA<BrokerException>()),
+      );
+      driveRequest();
+      session.peers = [PairedDevice(peer.id, 'Revoked storage', true)];
+      await expectLater(
+        runtime.handle('files', 'driveAuthorize', request),
+        throwsA(isA<BrokerException>()),
+      );
+    },
+  );
+  test(
+    'Drive refuses traversal, extra fields and a grant revoked during issuance',
+    () async {
+      final request = driveRequest();
+      await expectLater(
+        runtime.handle('files', 'driveAuthorize', {
+          ...request,
+          'url': 'https://example.test',
+        }),
+        throwsA(isA<BrokerException>()),
+      );
+      await expectLater(
+        runtime.handle('files', 'driveAuthorize', {
+          ...request,
+          'command': {...(request['command'] as Map), 'path': '../private'},
+        }),
+        throwsA(isA<FormatException>()),
+      );
+      session.beforeDevices = () async {
+        FlutterSecureStorage.setMockInitialValues({});
+      };
+      await expectLater(
+        runtime.handle('files', 'driveAuthorize', request),
+        throwsA(isA<BrokerException>()),
+      );
+    },
+  );
+  test('Drive claim matches the node interoperability vector', () {
+    expect(
+      driveRequestClaim(
+        core: pin,
+        device: 'a' * 64,
+        node: 'b' * 64,
+        command: const DriveCommand(
+          op: 'download',
+          volume: '11111111111111111111111111111111',
+          path: 'café/notes.md',
+        ),
+        nonce: 'c' * 64,
+        expires: 1900000000,
+      ),
+      'EasyPrivacy Drive request v1\n$pin\n${'a' * 64}\n${'b' * 64}\ndownload\n${'1' * 32}\nY2Fmw6kvbm90ZXMubWQ=\n\n\n0\n\n${'c' * 64}\n1900000000',
+    );
+  });
 
   test(
     'Files delegation is scoped to an enrolled peer, role and ephemeral key',

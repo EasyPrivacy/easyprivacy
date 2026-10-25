@@ -3,3 +3,4 @@ export 'src/vpn.dart';
 export 'src/capabilities.dart';
 export 'src/private_network.dart';
 export 'src/files.dart';
+export 'src/drive.dart';

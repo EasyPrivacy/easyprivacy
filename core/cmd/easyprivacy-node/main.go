@@ -41,6 +41,9 @@ func run() error {
 		return errors.New("usage: easyprivacy-node <setup|serve|identity|firewall|pair|devices|revoke|version> [--state-dir PATH]")
 	}
 	command := os.Args[1]
+	if strings.HasPrefix(command, "drive-") {
+		return runDrive(command, os.Args[2:])
+	}
 	if strings.HasPrefix(command, "service-") {
 		return runService(command, os.Args[2:])
 	}
