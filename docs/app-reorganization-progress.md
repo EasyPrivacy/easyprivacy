@@ -7,6 +7,53 @@ Windows; folder Sync now has real-engine and physical phone/laptop checks.
 Drive and extended device validation remain pending. The owner installed the node update; the physical checks below
 cover the private path, Internet VPN coexistence and actual file transfers.
 
+## Live folder Sync candidate, October 24, 2026
+
+- Files 1.0.0+6 fixes a false "synced folder location has changed" failure
+  when the app-support directory has a filesystem alias. Private folder access
+  now uses a resolved root; existing engine paths, grants and identity remain
+  in place. External-location, descendant-link and missing-root checks remain.
+- All 34 Files tests passed with the pinned native engine enabled (two physical
+  tests skipped). The added directory-alias regression covers restored selective
+  grants, browsing, nested edits, restart, configuration exclusion and confined
+  local-copy removal. Changed Dart files pass analysis. After installing build 6,
+  the owner confirmed the Android location error is resolved, automatic file
+  updates work, Android selective sync retains only chosen local files, and
+  deletion propagates between the Windows and Android devices. These are manual
+  owner-reported results; extended background testing remains pending.
+- Built the ARM64 build 6 APK, verified versionCode 6, the unchanged publisher
+  certificate and the bundled native engine. Sent the 23,487,949-byte
+  `easyprivacy-files-1.0.0-build6-android-arm64.apk` to `kason.phone` through
+  Files Send; the owner approved it and the recipient verified the complete file.
+  SHA-256: `194ec0615b48d53da898fe9bc8b09758229bdea2f392d38fb4ffb84d1c063da2`.
+- Files 1.0.0+5 attaches chosen Windows source/receiving directories. A source
+  shares complete contents with up to three receiving devices; receiver policies
+  support complete or selective local replicas with global-index browsing.
+- Added nested file actions, application choosers, automatic browser refresh,
+  explicit external-root authorization and unavailable-location handling.
+- Added an Android persisted Documents grant and bounded, journaled two-way
+  adapter for Documents/EasyPrivacy Files. Conflicting edits retain both copies;
+  replacing public documents records recovery state before any destructive rename.
+- Added opt-in Windows tray lifetime and an Android retained-engine foreground
+  service for connections to paired devices. Notification consent is required.
+- All 33 Files tests passed, including three real-engine replicas, source edits,
+  descendant downloads, metadata-only selection, guarded local-copy eviction,
+  missing roots, restart, encrypted bridges, source retention and nested actions.
+  Two opt-in physical tests were skipped; they do not validate this new workflow.
+- The Android Documents permission, native editor/move/delete actions and screen-off
+  service behavior need physical owner testing after delivery of the APK. Earlier
+  physical checks below apply to the previous app-private workflow.
+- Built both release bundles. Verified the ARM64 APK's package/versionCode 5 and
+  unchanged publisher certificate. Delivered the 23,487,773-byte
+  `easyprivacy-files-1.0.0-build5-android-arm64.apk` through the production Files
+  Send protocol to the owner-enabled `kason.phone` receiver; the recipient
+  approved and verified the complete file. SHA-256:
+  `2b178dca74c1480c2e67fdd43c3eb7bc98e13dfccb7fddb1cf50af268fa7bb64`.
+- Updated the Desktop `easyprivacy/Files` bundle, retaining its previous complete
+  bundle as `Files before build 5`. Its packaged diagnostic confirmed the live
+  Core session and private connection. Reopened the new Windows Files GUI.
+- See [current Sync behavior](files-sync.md) and [implementation map](files-live-folders-plan.md).
+
 ## Implemented
 
 - Three Flutter projects: apps/core, apps/vpn and apps/files, with shared

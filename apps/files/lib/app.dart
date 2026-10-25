@@ -5,6 +5,7 @@ import 'providers/device_transfer_provider.dart';
 import 'screens/send_screen.dart';
 import 'providers/folder_sync_provider.dart';
 import 'screens/sync_screen.dart';
+import 'background/files_background.dart';
 
 class EasyPrivacyFilesApp extends StatefulWidget {
   const EasyPrivacyFilesApp({
@@ -25,8 +26,10 @@ class _EasyPrivacyFilesAppState extends State<EasyPrivacyFilesApp> {
       widget.connection ?? BrokerCoreConnection(capability: 'files');
   late final transfers = widget.transfers ?? DeviceTransferProvider();
   late final sync = widget.sync ?? FolderSyncProvider(transfers: transfers);
+  late final background = widget.sync == null ? FilesBackground(sync) : null;
   @override
   void dispose() {
+    background?.dispose();
     if (widget.connection == null) core.dispose();
     if (widget.sync == null) sync.dispose();
     if (widget.transfers == null) transfers.dispose();
@@ -88,7 +91,7 @@ class _EasyPrivacyFilesAppState extends State<EasyPrivacyFilesApp> {
                 child: TabBarView(
                   children: [
                     SendScreen(provider: transfers),
-                    SyncScreen(provider: sync),
+                    SyncScreen(provider: sync, background: background),
                     const _Mode(
                       icon: Icons.cloud_outlined,
                       title: 'Your private Drive',

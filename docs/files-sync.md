@@ -1,34 +1,60 @@
-# Files Sync: first implementation
+# Files Sync: live folders
 
-Files 1.0.0+3 adds two-device folder Sync on Windows x64 and Android ARM64.
-Files 1.0.0+4 adds streamed native Android source selection and rejects incomplete
-imports before replacing a local file.
-It uses Core 1.0.0+10 and the existing 1.0.1~reorg1 node package. No further
-node update or public service port is needed.
+Files 1.0.0+5 uses chosen Windows directories, a managed Android Documents tree,
+multiple receiving devices and optional selective sync/background operation.
+Core 1.0.0+10 and the existing 1.0.1~reorg1 node package remain sufficient.
 
 ## Using Sync
 
-1. Pair both devices to the same Core, grant Files access and start the private
-   connection. Open Files on both devices. An Internet VPN is optional.
-2. Enable folder Sync on both devices. Create shared folder, choose an online
-   device and acknowledge that changes **and deletions** propagate.
-3. The recipient must explicitly accept. Each device creates its own local
-   folder inside Files. The sender cannot choose the recipient's filesystem path.
-4. Browse files to import at the folder root, replace an existing file after
-   confirmation, save a copy outside Files, or delete a file after confirmation.
-   Browsing, export and deletion support subdirectories.
-5. Pause stops that folder's synchronization. Changes made while paused or while
-   Sync is off reconcile when it resumes. Keep Files open on both devices.
-6. Stop sharing removes the synchronization grant and retains a browsable local
-   copy. Delete local copy is a separate action available afterward; the other
-   device keeps its folder. An explicit invitation with the same folder/device
-   identity can reconnect a retained copy.
+1. Pair devices to the same Core, grant Files access, and enable the private
+   connection. An Internet VPN is optional. Enable folder Sync in Files.
+2. On Windows, **Choose folder to sync** attaches an existing directory and every
+   descendant. Choose an online device to invite and approve propagation of
+   changes and deletions. The source always keeps and shares its complete contents.
+3. A receiving Windows device chooses its own existing local directory when it
+   accepts. Existing contents there are also shared. Folder locations cannot
+   overlap another configured Sync folder or Files' private configuration.
+4. Android asks once for a persistent grant to Documents (or its existing
+   EasyPrivacy Files directory), using the system folder picker. Files creates
+   `Documents/EasyPrivacy Files/<folder name>`; unrelated existing directories
+   are not adopted implicitly. Name collisions get a distinct suffix.
+5. Recipients choose **Sync everything** or **Selective sync** on acceptance or
+   afterward. Selective sync lists the global directory index without fetching
+   unselected file content. Browse and check files/subfolders to keep them locally.
+   Rules apply to descendants, with explicit child choices taking precedence.
+   Deselecting removes this device's synced file copies after verifying the source
+   has their latest indexed versions. Unsynced/changed copies are preserved.
+6. Browse files to add files within the current subdirectory, create folders,
+   open/edit via an application chooser, move/rename within the shared tree, or
+   delete files/directories. Changes made directly in a synced location are also
+   detected automatically. In selective mode an unselected local item must be
+   selected before its changes participate in synchronization.
+7. The source can **Add device** to share the same folder with additional paired
+   devices. Changes pass through the source replica, so it must remain available
+   for receivers to exchange updates. Core carries private streams and stores no
+   offline file copy.
+8. Files asks whether to run in the background. Windows keeps a tray icon when
+   its window closes; the tray provides Open and Quit. Android keeps the same
+   Files engine alive in a connected-device foreground service and shows an
+   ongoing notification. This setting can be changed in Sync. Force-stop or OS
+   shutdown still stops the application; boot auto-start is not implemented.
+9. Pause stops synchronization. Resume reconciles changes. Stop sharing retains
+   files. Forgetting an externally chosen Windows folder or an Android Documents
+   folder removes its app entry while retaining its files.
 
-At most eight folder copies (including archived copies), three active peers,
-and one peer per folder are supported. Arbitrary existing folders, Android
-document-provider trees, background hosting, multi-peer sharing, and a version
-restore UI are future work. Android document-tree URIs cannot be passed directly
-to a filesystem engine. Uninstalling Files removes its private folders.
+The initial limits remain eight configured folders and three active peer devices.
+Previous app-private folders remain usable. On Android, **Place in Documents**
+connects an existing folder to the public Documents location after the owner grants
+access. Android public files survive uninstall; its private engine/index, retained
+versions and journal do not.
+
+Android's document URIs cannot be used as ordinary filesystem paths by the pinned
+engine. A journaled adapter therefore maintains a private working copy as well as
+its public Documents copy for selected files. Allow storage for both copies and
+retained versions. Hashes and bounded streaming copies detect conflicting edits;
+both versions are retained. Lost grants or a missing root report an unavailable
+location instead of being treated as empty folders. Interrupted public document
+replacements retain a recovery record before any rename.
 
 ## Engine and privacy boundary
 
@@ -96,6 +122,26 @@ pinned URL; `collect-licenses.py` regenerates notices from source and the select
 Go runtime. Preserve notices and source availability when redistributing apps.
 
 ## Verification
+
+Build 6 fixes false location-change errors caused by aliases in the app-support
+path. Private file management uses the resolved root without rewriting saved
+engine locations or requiring new folder invitations. All 34 Files tests pass,
+including a directory-alias regression for restored selective grants, browsing,
+edits, restart and confined local-copy removal. Two opt-in physical tests remain
+skipped. In manual Windows/Android testing, the owner confirmed the location
+error is resolved, automatic file updates work, selective sync keeps only the
+chosen Android copies, and deletions propagate to the other device. Extended
+background behavior remains a separate check.
+
+Build 5 passed 33 Files tests with the pinned native engine enabled. The live
+folder test uses three isolated replicas and verifies nested directory selection,
+literal filenames, global-index visibility without download, guarded eviction
+without a remote deletion, automatic external edits/deletes, unavailable source
+paths and restart. Document-adapter tests cover two-way changes, conflicts,
+permission loss and journal reload using synthetic document storage. Both native
+release bundles compile. The build 5 APK was delivered through approved Files
+Send with a verified recipient receipt; this delivery does not establish physical
+validation of its new Android Documents or background behavior.
 
 Ordinary tests cover explicit approval, identity changes, atomic grant loading,
 pause/stop preserving files, restart without restoring removed grants, confined

@@ -12,6 +12,8 @@
 /apps/*/linux/flutter/generated_plugins.cmake
 /core/scripts/__pycache__/
 /test-results/
+# Local folder used for manual phone/desktop Sync checks.
+/Test/
 *.log
 /.tools/
 /native/pairing/target/

@@ -33,17 +33,22 @@ void main() {
     sync.invitation = SyncInvitation('folder', 'Shared photos', peer, 'engine');
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: SyncScreen(provider: sync)),
+        home: Scaffold(
+          body: SyncScreen(
+            provider: sync,
+            chooseDirectory: () async => r'C:\Test folder',
+          ),
+        ),
       ),
     );
-    await tester.scrollUntilVisible(find.text('Accept folder'), 180);
-    await tester.tap(find.text('Accept folder'));
-    expect(await sync.invitation!.decision.future, isTrue);
+    await tester.scrollUntilVisible(find.text('Decline folder'), 180);
+    await tester.tap(find.text('Decline folder'));
+    expect(await sync.invitation!.decision.future, isFalse);
     sync.invitation = null;
     sync.changed();
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Create shared folder'));
-    await tester.tap(find.text('Create shared folder'));
+    await tester.ensureVisible(find.text('Choose folder to sync'));
+    await tester.tap(find.text('Choose folder to sync'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Test folder');
     expect(

@@ -74,7 +74,18 @@ try {
     Copy-Item -Path (Join-Path $stagedApp 'build/windows/x64/runner/Release/*') -Destination $output -Recurse -Force
     $version = (Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'VERSION')).Trim()
     $archive = Join-Path $appRoot "build/easyprivacy-$App-windows-$version-x64.zip"
-    Compress-Archive -Path (Join-Path $output '*') -DestinationPath $archive -Force
+    # Flutter bundles have identically named data/app.so and asset files.
+    # Include a distinct top-level folder so extracting several app ZIPs into
+    # one location cannot overwrite another application's runtime payload.
+    $folderName = switch ($App) {
+        'core' { 'EasyPrivacy Core' }
+        'vpn' { 'EasyPrivacy VPN' }
+        'files' { 'EasyPrivacy Files' }
+    }
+    $packageFolder = Join-Path (Join-Path $staging 'packages') $folderName
+    New-Item -ItemType Directory -Force -Path $packageFolder | Out-Null
+    Copy-Item -Path (Join-Path $output '*') -Destination $packageFolder -Recurse
+    Compress-Archive -LiteralPath $packageFolder -DestinationPath $archive -Force
     $checksum = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     "$checksum  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath ($archive+'.sha256') -Encoding ascii
     Write-Output $archive

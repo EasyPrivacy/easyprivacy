@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:easyprivacy_files/providers/device_transfer_provider.dart';
 import 'package:easyprivacy_files/providers/folder_sync_provider.dart';
 import 'package:easyprivacy_files/sync/sync_engine.dart';
+import 'package:easyprivacy_files/sync/sync_paths.dart';
 import 'package:easyprivacy_files/transfer/secure_channel.dart';
 import 'package:easyprivacy_files/transfer/send_engine.dart';
 
@@ -72,6 +73,8 @@ class FakeEngine extends SyncEngine {
     String label,
     String peer, {
     bool paused = false,
+    Iterable<String>? peers,
+    SyncSelection? selection,
   }) async {
     configured[id] = paused;
     await folder(id).create(recursive: true);
@@ -87,7 +90,13 @@ class FakeEngine extends SyncEngine {
     Map<String, String>? query,
   }) async => {'connections': {}};
   @override
-  Future<Map<String, dynamic>> status(String id) async => {};
+  Future<Map<String, dynamic>> status(String id) async => {
+    'state': 'idle',
+    'needTotalItems': 0,
+  };
+  @override
+  Future<List<Map<String, dynamic>>> browse(String id, String relative) async =>
+      [];
   @override
   Future<void> scan(String id) async {}
 }
@@ -287,6 +296,186 @@ void main() {
       expect(provider.initialized, isFalse);
       expect(provider.enabled, isFalse);
       expect(provider.folders, isEmpty);
+    },
+  );
+  test(
+    'source folders stay complete and forgetting an external folder preserves every file',
+    () async {
+      final chosen = await Directory.systemTemp.createTemp(
+        'ep-chosen-source-test-',
+      );
+      addTearDown(() => chosen.delete(recursive: true));
+      final original = await File(
+        '${chosen.path}/original.txt',
+      ).writeAsString('keep original');
+      final location = await provider.validateLocation(chosen.path);
+      final folder = SyncFolder(
+        id: folderId,
+        label: 'Source',
+        peer: peer,
+        enginePeer: engineId,
+        localPath: location,
+        isSource: true,
+      );
+      provider.folders.add(folder);
+      await expectLater(
+        provider.setSelective(folder, true),
+        throwsA(isA<TransferFailure>()),
+      );
+      await provider.remove(folder);
+      await provider.deleteLocalCopy(folder);
+      expect(await original.readAsString(), 'keep original');
+      expect(provider.folders, isEmpty);
+    },
+  );
+  test(
+    'an aliased app-support path restores private folders without reporting a move',
+    () async {
+      await provider.setEnabled(false);
+      provider.dispose();
+      final physical = await Directory('${root.path}/physical').create();
+      final alias = Link('${root.path}/app-support-alias');
+      if (Platform.isWindows) {
+        // Directory junctions need no symlink privilege on Windows.
+        final result = await Process.run(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            r'New-Item -ItemType Junction -Path $env:EP_SYNC_ALIAS -Target $env:EP_SYNC_TARGET -ErrorAction Stop | Out-Null',
+          ],
+          environment: {
+            'EP_SYNC_ALIAS': alias.path,
+            'EP_SYNC_TARGET': physical.path,
+          },
+        );
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+      } else {
+        await alias.create(physical.path);
+      }
+      final support = await Directory('${alias.path}/support').create();
+      final disk = await Directory(
+        '${physical.path}/support/folders/$folderId',
+      ).create(recursive: true);
+      final original = await File('${disk.path}/Test.md').writeAsString('keep');
+      final restored = SyncFolder(
+        id: folderId,
+        label: 'Test',
+        peer: peer,
+        enginePeer: engineId,
+        selection: SyncSelection(selective: true, rules: {'Test.md': true}),
+      );
+      await File('${support.path}/state.json').writeAsString(
+        jsonEncode({
+          'version': 2,
+          'core': corePin,
+          'enabled': true,
+          'folders': [restored.toJson()],
+        }),
+      );
+      // The strict guard must still reject unresolved/redirected roots.
+      await expectLater(
+        syncLocalPath(Directory('${support.path}/folders/$folderId'), ''),
+        throwsA(isA<TransferFailure>()),
+      );
+      Future<void> restore() async {
+        engine = FakeEngine(support);
+        provider = FolderSyncProvider(
+          transfers: transfers,
+          rootFactory: (_) async => support,
+          engineFactory: (_) => engine,
+          autoStart: false,
+        );
+        await provider.initialize();
+        expect(provider.error, isNull);
+        expect(provider.enabled, isTrue);
+        // Saved engine paths retain their spelling; identity/config need no migration.
+        expect(engine.root.path, support.path);
+      }
+
+      await restore();
+      final folder = provider.folders.single;
+      expect((await provider.entries(folder, '')).single.name, 'Test.md');
+      expect(folder.selection.rules, {'Test.md': true});
+      await expectLater(
+        provider.validateLocation('${physical.path}/support'),
+        throwsA(isA<TransferFailure>()),
+      );
+      await provider.createDirectory(folder, 'nested');
+      await provider.importFile(
+        folder,
+        TransferSource(
+          name: 'added.txt',
+          size: 4,
+          read: (_, _) => Stream.value([116, 101, 115, 116]),
+        ),
+        relative: 'nested',
+      );
+      await provider.move(folder, 'nested/added.txt', 'nested/renamed.txt');
+      expect(
+        await File('${disk.path}/nested/renamed.txt').readAsString(),
+        'test',
+      );
+      await provider.deleteEntry(folder, 'nested/renamed.txt');
+      await provider.shutdown();
+      provider.dispose();
+      await restore();
+      expect(
+        (await provider.entries(
+          provider.folders.single,
+          '',
+        )).map((entry) => entry.name),
+        contains('Test.md'),
+      );
+      expect(provider.folders.single.selection.rules['Test.md'], isTrue);
+      expect(await original.readAsString(), 'keep');
+      final reloaded = provider.folders.single;
+      await provider.remove(reloaded);
+      await provider.deleteLocalCopy(reloaded);
+      expect(await original.exists(), isFalse);
+      expect(await File('${support.path}/state.json').exists(), isTrue);
+      await provider.shutdown();
+    },
+  );
+  test(
+    'nested file management stays confined to its shared directory',
+    () async {
+      final pending = incoming(FakeChannel());
+      await Future<void>.delayed(Duration.zero);
+      provider.decide(true);
+      await pending;
+      final folder = provider.folders.single;
+      await provider.createDirectory(folder, 'nested');
+      await provider.importFile(
+        folder,
+        TransferSource(
+          name: 'example.txt',
+          size: 4,
+          read: (_, _) => Stream.value([116, 101, 115, 116]),
+        ),
+        relative: 'nested',
+      );
+      await provider.move(folder, 'nested/example.txt', 'nested/renamed.txt');
+      expect(
+        await File(
+          '${provider.directory(folder).path}/nested/renamed.txt',
+        ).readAsString(),
+        'test',
+      );
+      await expectLater(
+        provider.move(folder, 'nested', '../outside'),
+        throwsA(isA<TransferFailure>()),
+      );
+      await expectLater(
+        provider.deleteEntry(folder, '.stfolder'),
+        throwsA(isA<TransferFailure>()),
+      );
+      await provider.deleteEntry(folder, 'nested');
+      expect(
+        await Directory('${provider.directory(folder).path}/nested').exists(),
+        isFalse,
+      );
     },
   );
 }

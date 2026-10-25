@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as paths;
 import 'package:xml/xml.dart';
 import 'engine_process_owner.dart';
+import 'sync_paths.dart';
 import '../transfer/secure_channel.dart';
 
 const syncEngineVersion = 'v2.1.7';
@@ -25,13 +26,21 @@ class SyncEngine {
   int? apiPort, syncPort;
   Future<void> _updates = Future.value();
   final List<String> diagnostics = [];
+  final Map<String, Directory> _locations = {};
+  void registerLocation(String id, Directory directory) {
+    if (!validSyncFolder(id) || !directory.isAbsolute) {
+      throw const TransferFailure('Invalid synced folder location.');
+    }
+    _locations[id] = directory;
+  }
+
   bool get running => _process != null && deviceId != null;
   Directory get home => Directory(paths.join(root.path, 'engine'));
   Directory folder(String id) {
     if (!validSyncFolder(id)) {
       throw const TransferFailure('Invalid synced folder.');
     }
-    return Directory(paths.join(root.path, 'folders', id));
+    return _locations[id] ?? Directory(paths.join(root.path, 'folders', id));
   }
 
   Map<String, String> get _environment {
@@ -404,9 +413,20 @@ class SyncEngine {
     String label,
     String peer, {
     bool paused = false,
+    Iterable<String>? peers,
+    SyncSelection? selection,
   }) async {
     final directory = folder(id);
-    await directory.create(recursive: true);
+    if (_locations.containsKey(id)) {
+      await syncLocalPath(directory, '');
+    } else {
+      await directory.create(recursive: true);
+    }
+    final members = {...?peers, peer};
+    if (members.any((id) => !validSyncDevice(id))) {
+      throw const TransferFailure('Invalid Sync peer.');
+    }
+    // New selective replicas must be paused until their ignore policy is saved.
     await _mutate((config) {
       final folders = config['folders'] as List;
       final existing = folders.where((f) => f['id'] == id);
@@ -423,12 +443,13 @@ class SyncEngine {
         'filesystemType': 'basic',
         'devices': [
           {'deviceID': deviceId},
-          {'deviceID': peer},
+          for (final member in members) {'deviceID': member},
         ],
-        'paused': paused,
+        'paused': selection == null ? paused : true,
         'ignorePerms': true,
         'rescanIntervalS': 30,
         'fsWatcherEnabled': true,
+        'fsWatcherDelayS': 1,
         'minDiskFree': {'value': 268435456, 'unit': 'B'},
         'versioning': {
           'type': 'simple',
@@ -438,6 +459,38 @@ class SyncEngine {
       });
       if (existing.isEmpty) folders.add(entry);
     });
+    if (selection != null) {
+      await setSelection(id, selection);
+      if (!paused) {
+        await _mutate((config) {
+          for (final f in config['folders'] as List) {
+            if (f['id'] == id) f['paused'] = false;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> setSelection(String id, SyncSelection selection) async {
+    await call(
+      'POST',
+      'db/ignores',
+      query: {'folder': id},
+      body: {'ignore': selection.ignorePatterns},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> browse(String id, String relative) async {
+    syncRelative(relative, allowRoot: true);
+    final result = await call(
+      'GET',
+      'db/browse',
+      query: {'folder': id, 'prefix': relative, 'levels': '0'},
+    );
+    if (result is! List) {
+      throw const TransferFailure('Invalid Sync directory index.');
+    }
+    return result.map((v) => Map<String, dynamic>.from(v as Map)).toList();
   }
 
   Future<Map<String, dynamic>> status(String id) async =>
